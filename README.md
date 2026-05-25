@@ -1,34 +1,36 @@
-# Virtual Human Video Segment Player
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Introduction
+## Getting Started
 
-This tool exists to support Wizard of Oz testing of a virtual human interaction scenario. The virtual human is represented as a pre-recorded video, and a tester manually triggers different video segments in real time using keyboard shortcuts — simulating the illusion of a reactive virtual human for the visitor.
+First, run the development server:
 
-The Mindlabs team behind the virtual human built a similar internal tool, but it only runs on macOS. Since 3 out of 6 team members (including the tester) are on Windows, a cross-platform browser-based alternative is needed. The goal is to have something working immediately, starting with a single video and single project, with room to extend later.
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
----
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## User Stories
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-1. As a tester, I want the app to have a video player that I can make fullscreen, so that the setup looks like the original installation and the visitor experiences it as intended.
-2. As a tester, I want to trigger specific video segments by pressing a keyboard key, so that I can simulate the virtual human responding without interrupting the video.
-3. As a tester, I want to trigger segments while the video player is in fullscreen, so that I do not have to exit fullscreen and interrupt the interaction.
-4. As a tester, I want to define segments myself by assigning a start time and a label to each key, so that I can configure the interaction before a test session.
-5. As a tester, I want the app to record which keys were pressed and in what sequence, so that I can review what happened during the session.
-6. As a tester, I want to load a video by uploading a file or pasting a Google Drive link, so that I am not dependent on a specific machine or file path.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
----
+## Learn More
 
-## Requirements
+To learn more about Next.js, take a look at the following resources:
 
-### Functional
-- Keyboard-triggered segment playback: pressing a configured key seeks the video to the assigned start time and plays from there
-- Segment configuration: each key can be assigned a start time (in seconds) and a human-readable label
-- Session logging: the app tracks the sequence and timing of key presses during a session
-- Video loading: support local file upload and Google Drive link as input methods
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Technical
-- Runs in the browser on any OS (no native bindings, no platform-specific dependencies)
-- Video stored in the browser
-- Built with as few frameworks and dependencies as possible
-- Initially scoped to a single video and single project; designed to be extended
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
