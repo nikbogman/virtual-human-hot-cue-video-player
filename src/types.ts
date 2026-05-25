@@ -1,4 +1,4 @@
-export interface Segment {
+export interface HotCue {
   key: string
   startTime: number
   label: string

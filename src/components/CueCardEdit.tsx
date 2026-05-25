@@ -1,44 +1,55 @@
 import { useState } from 'react'
 import { formatTime, parseTime } from '../lib/time'
-import type { Segment } from '../types'
+import type { HotCue } from '../types'
+import { X } from 'lucide-react'
 
 const inputCls =
-  'bg-[#111] border border-[#444] rounded-[3px] text-[#eee] text-xs ' +
-  'px-[5px] py-[2px] h-6 outline-none focus:border-[#666]'
+  'bg-[#111] border border-[#444] rounded-[3px] text-[#eee] text-[11px] ' +
+  'px-1 py-px h-5 outline-none focus:border-[#666]'
 
 interface Props {
-  seg: Segment
+  cue: HotCue
   index: number
-  segments: Segment[]
-  onUpdate: (patch: Partial<Segment>) => void
+  cues: HotCue[]
+  onUpdate: (patch: Partial<HotCue>) => void
   onDelete: () => void
   onClose: () => void
 }
 
-export default function CueCardEdit({ seg, index, segments, onUpdate, onDelete, onClose }: Props) {
-  const [keyVal, setKeyVal] = useState(seg.key)
-  const [timeVal, setTimeVal] = useState(formatTime(seg.startTime))
+export default function CueCardEdit({ cue, index, cues, onUpdate, onDelete, onClose }: Props) {
+  const [keyVal, setKeyVal] = useState(cue.key)
+  const [timeVal, setTimeVal] = useState(formatTime(cue.startTime))
   const [keyInvalid, setKeyInvalid] = useState(false)
   const [timeInvalid, setTimeInvalid] = useState(false)
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2 py-1 bg-[#1c1c1c] border border-[#555] rounded cursor-default h-9 whitespace-nowrap flex-shrink-0"
+      className="relative flex flex-col items-start gap-1 p-1.5 bg-[#1c1c1c] border border-[#555] rounded cursor-default w-20 h-20 flex-shrink-0 overflow-hidden"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose()
         e.stopPropagation()
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      <button
+        className="absolute top-1 right-1 bg-transparent border-none text-[#444] cursor-pointer text-[10px] leading-none rounded-[3px] hover:text-[#c44]"
+        title="Delete"
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+      >
+        <X size={12} />
+      </button>
       <input
-        className={`${inputCls} w-[30px] text-center font-mono font-bold text-[13px]${keyInvalid ? ' border-[#c44]' : ''}`}
+        className={`${inputCls} w-1/2 font-mono font-bold text-base${keyInvalid ? ' border-[#c44]' : ''}`}
         maxLength={1}
         value={keyVal}
         title="Trigger key (single character)"
         onChange={(e) => {
           const val = e.target.value.slice(-1).toLowerCase()
           setKeyVal(val)
-          const dup = segments.some((s, i) => i !== index && s.key === val)
+          const dup = cues.some((c, i) => i !== index && c.key === val)
           if (val.length === 1 && !dup) {
             setKeyInvalid(false)
             onUpdate({ key: val })
@@ -46,9 +57,10 @@ export default function CueCardEdit({ seg, index, segments, onUpdate, onDelete, 
             setKeyInvalid(true)
           }
         }}
+        placeholder='A'
       />
       <input
-        className={`${inputCls} w-[54px] font-mono text-center${timeInvalid ? ' border-[#c44]' : ''}`}
+        className={`${inputCls} w-full font-mono${timeInvalid ? ' border-[#c44]' : ''}`}
         value={timeVal}
         title="Start time (m:ss or seconds)"
         onChange={(e) => setTimeVal(e.target.value)}
@@ -64,22 +76,12 @@ export default function CueCardEdit({ seg, index, segments, onUpdate, onDelete, 
         }}
       />
       <input
-        className={`${inputCls} w-[120px]`}
-        value={seg.label}
+        className={`${inputCls} w-full`}
+        value={cue.label}
         placeholder="Label"
         autoFocus
         onChange={(e) => onUpdate({ label: e.target.value })}
       />
-      <button
-        className="bg-transparent border-none text-[#555] cursor-pointer text-[11px] px-[4px] py-[2px] leading-none rounded-[3px] hover:text-[#c44] hover:bg-red-500/10"
-        title="Delete"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-      >
-        ✕
-      </button>
     </div>
   )
 }
