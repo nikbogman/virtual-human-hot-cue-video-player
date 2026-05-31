@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Synced Player</title>
+</head>
+
+<body>
+  <h1>Synced Player</h1>
+  <video id="video" src="video.mp4" width="460"></video>
+  <br>
+  <button id="syncBtn">Click to Sync</button>
+
+  <script>
+    const video = document.getElementById('video');
+    const channel = new BroadcastChannel('video_sync');
+    let userHasInteracted = false;
+
+    document.getElementById('syncBtn').addEventListener('click', () => {
+      userHasInteracted = true;
+      channel.postMessage({ type: 'request_initial_state' });
+    });
+
+    channel.addEventListener('message', ({ data }) => {
+      if (data.type === 'send_initial_state') {
+        if (!userHasInteracted) return;
+        video.currentTime = data.currentTime;
+        if (data.isPlaying) {
+          video.play();
+        } else {
+          video.pause();
+        }
+      }
+
+      if (data.type === 'play') {
+        video.currentTime = data.currentTime;
+        video.play();
+      } else if (data.type === 'pause') {
+        video.currentTime = data.currentTime;
+        video.pause();
+      } else if (data.type === 'seek') {
+        video.currentTime = data.currentTime;
+      }
+    });
+  </script>
+</body>
+
+</html>

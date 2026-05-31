@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Main Player</title>
+</head>
+
+<body>
+  <h1>Main Player</h1>
+  <video id="video" src="video.mp4" controls width="640"></video>
+  <br>
+  <button onclick="openPopup()">Open synced window</button>
+  <button onclick="seekToMark()">Go to 1.32s</button>
+
+  <script>
+    const video = document.getElementById('video');
+    const channel = new BroadcastChannel('video_sync');
+
+    function openPopup() {
+      window.open('popup.html', '_blank', 'width=480,height=300');
+    }
+
+    function seekToMark() {
+      video.currentTime = 1.32;
+      channel.postMessage({ type: 'seek', currentTime: 1.32 });
+    }
+
+    video.addEventListener('play', () => {
+      channel.postMessage({ type: 'play', currentTime: video.currentTime });
+    });
+
+    video.addEventListener('pause', () => {
+      channel.postMessage({ type: 'pause', currentTime: video.currentTime });
+    });
+
+    video.addEventListener('seeked', () => {
+      channel.postMessage({ type: 'seek', currentTime: video.currentTime });
+    });
+
+    channel.onmessage = (event) => {
+      if (event.data.type === 'request_initial_state') {
+        channel.postMessage({
+          type: 'send_initial_state',
+          currentTime: video.currentTime,
+          isPlaying: !video.paused
+        });
+      }
+    };
+  </script>
+</body>
+
+</html>
