@@ -2,21 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import type { HotCue } from '../types'
 
 export function useHotCues(onCuePress: (cue: HotCue) => void) {
-  const [cues, setCues] = useState<HotCue[]>(() => {
-    if (typeof window === 'undefined') return []
-    try {
-      const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
-      return Array.isArray(saved) ? saved : []
-    } catch {
-      return []
-    }
-  })
+  const [cues, setCues] = useState<HotCue[]>([])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const cuesRef = useRef(cues)
   const editingIndexRef = useRef(editingIndex)
   const onCuePressRef = useRef(onCuePress)
+  const cuesLoadedRef = useRef(false)
 
   useEffect(() => {
     cuesRef.current = cues
@@ -31,6 +24,18 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
   }, [onCuePress])
 
   useEffect(() => {
+    const id = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
+        if (Array.isArray(saved)) setCues(saved)
+      } catch {}
+      cuesLoadedRef.current = true
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [])
+
+  useEffect(() => {
+    if (!cuesLoadedRef.current) return
     localStorage.setItem('hotCues', JSON.stringify(cues))
   }, [cues])
 
