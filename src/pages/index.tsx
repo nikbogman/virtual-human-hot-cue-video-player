@@ -3,6 +3,7 @@ import Head from 'next/head'
 import dynamic from 'next/dynamic'
 import CueCardEdit from '../components/CueCardEdit'
 import CueCardFace from '../components/CueCardFace'
+import type { CueGraphHandle } from '../components/CueGraph'
 import { useHotCues } from '../hooks/useHotCues'
 import { useCueGraph } from '../hooks/useCueGraph'
 import { useSyncBroadcast } from '../hooks/useSyncBroadcast'
@@ -23,6 +24,7 @@ export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const cueGraphRef = useRef<CueGraphHandle>(null)
 
   const [view, setView] = useState<'list' | 'graph'>('list')
 
@@ -267,6 +269,15 @@ export default function HotCuePlayer() {
               <Trash2 size={14} />
               Clear all
             </button>
+            {view === 'graph' && (
+              <button
+                className={`${btnCls} hover:border-[#c44] hover:text-[#c44]`}
+                onClick={(e) => { e.stopPropagation(); cueGraphRef.current?.deleteSelected() }}
+              >
+                <Trash2 size={14} />
+                Clear selected
+              </button>
+            )}
           </div>
         </div>
 
@@ -317,6 +328,7 @@ export default function HotCuePlayer() {
         ) : (
           <div className="flex-1 min-h-0 mb-3 rounded overflow-hidden border border-[#222]">
             <CueGraph
+              ref={cueGraphRef}
               cues={cues}
               positions={graph.positions}
               links={graph.links}
