@@ -131,22 +131,19 @@ export default forwardRef<CueGraphHandle, Props>(function CueGraph({
   addLink,
   removeLink,
 }: Props, ref) {
-  // Live drag offsets so node dragging stays smooth; only persisted on drag stop.
-  const [drag, setDrag] = useState<Record<string, CuePosition>>({})
-
-  const nodes = useMemo<CueFlowNode[]>(
+  const initialNodes = useMemo<CueFlowNode[]>(
     () =>
       cues.map((cue, index) => ({
         id: cue.id,
         type: 'cueNode',
-        position: drag[cue.id] ?? positions[cue.id] ?? gridPosition(index),
+        position: positions[cue.id] ?? gridPosition(index),
         data: { cue, index },
         deletable: false, // cues are removed via the card's delete button, not Backspace
       })),
-    [cues, positions, drag],
+    [cues, positions],
   )
 
-  const edges = useMemo(() => {
+  const initialEdges = useMemo(() => {
     const ids = new Set(cues.map((c) => c.id))
     return links
       .filter((l) => ids.has(l.source) && ids.has(l.target))
