@@ -50,7 +50,6 @@ export default function HotCuePlayer() {
 
   // Cue waiting to be seeked + played once its clip has loaded.
   const pendingCueRef = useRef<HotCue | null>(null)
-  const queuedCueRef = useRef<HotCue | null>(null)
 
   function applyPendingCue() {
     const vid = videoRef.current
@@ -62,57 +61,31 @@ export default function HotCuePlayer() {
   }
 
   function handleVideoEnded() {
-    const vid = videoRef.current
-    if (!vid) return
-
-    // If there's a queued cue, play it
-    if (queuedCueRef.current) {
-      const queued = queuedCueRef.current
-      queuedCueRef.current = null
-      setPlayingId(queued.id)
-      pendingCueRef.current = queued
-      if (activeIdRef.current === queued.id) {
-        applyPendingCue()
-      } else {
-        setSelectedId(queued.id)
-      }
-    }
-    // If there's an idle cue and it's not already selected, play it
-    else if (idleCueId && activeIdRef.current !== idleCueId) {
-      const idleCue = cues.find((c) => c.id === idleCueId)
-      if (idleCue) {
-        setPlayingId(null) // Clear playing highlight for idle
-        pendingCueRef.current = idleCue
-        if (activeIdRef.current === idleCueId) {
-          applyPendingCue()
-        } else {
-          setSelectedId(idleCueId)
-        }
-      }
-    }
-    // Otherwise just stop
-    else {
+    if (!idleCueId) {
       setPlayingId(null)
-    }
-  }
-
-  function handleCuePress(cue: HotCue) {
-    const vid = videoRef.current
-    const isPlaying = vid && !vid.paused && !vid.ended
-
-    // If something is playing, queue this cue instead
-    if (isPlaying) {
-      queuedCueRef.current = cue
       return
     }
 
-    // Otherwise play immediately
+    // If a selected cue just finished, return to idle mode.
+    if (selectedId) {
+      setSelectedId(null)
+      setPlayingId(null)
+      const idleCue = cues.find((c) => c.id === idleCueId)
+      if (idleCue) {
+        pendingCueRef.current = idleCue
+      }
+      return
+    }
+
+    setPlayingId(null)
+  }
+
+  function handleCuePress(cue: HotCue) {
+    setSelectedId(cue.id)
     setPlayingId(cue.id)
     pendingCueRef.current = cue
     if (activeIdRef.current === cue.id) {
       applyPendingCue() // clip already loaded — seek + play now
-    } else {
-      setSelectedId(cue.id) // switch clips; onLoadedMetadata will apply
     }
   }
 
@@ -125,7 +98,12 @@ export default function HotCuePlayer() {
   function handleDeleteCue(i: number) {
     const id = cues[i]?.id
     deleteCue(i)
-    if (id) graph.removeNode(id)
+    if (id) {
+      graph.removeNode(id)
+      if (idleCueId === id) setIdleCueId(null)
+      if (selectedId === id) setSelectedId(null)
+      if (playingId === id) setPlayingId(null)
+    }
   }
 
   function handleClearCues() {
@@ -139,9 +117,15 @@ export default function HotCuePlayer() {
     [graph.links, playingId],
   )
 
-  // Effective active clip: the explicitly selected one if it still exists, else
-  // the first cue so the player shows a frame instead of black. Derived, not effect-synced.
-  const activeId = selectedId && cues.some((c) => c.id === selectedId) ? selectedId : cues[0]?.id ?? null
+  // Effective active clip: the explicitly selected one if it still exists,
+  // otherwise the idle cue if configured, otherwise the first cue.
+  const activeId =
+    selectedId && cues.some((c) => c.id === selectedId)
+      ? selectedId
+      : idleCueId && cues.some((c) => c.id === idleCueId)
+      ? idleCueId
+      : cues[0]?.id ?? null
+
   useEffect(() => {
     activeIdRef.current = activeId
   })
@@ -264,6 +248,7 @@ export default function HotCuePlayer() {
             className={`w-full h-full object-contain ${activeSrc ? 'block' : 'hidden'}`}
             controls
             src={activeSrc}
+            loop={selectedId === null && !!idleCueId}
             onLoadedMetadata={applyPendingCue}
             onEnded={handleVideoEnded}
           />
@@ -364,7 +349,7 @@ export default function HotCuePlayer() {
                     cue={cue} 
                     onEdit={() => setEditingIndex(i)} 
                     onDelete={() => handleDeleteCue(i)}
-                    onSetIdle={() => setIdleCueId(cue.id)}
+                    onSetIdle={() => setIdleCueId((current) => (current === cue.id ? null : cue.id))}
                     isIdle={idleCueId === cue.id}
                   />
                 </div>
