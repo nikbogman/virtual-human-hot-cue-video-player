@@ -1,11 +1,13 @@
 import { formatTime } from '../lib/time'
 import type { HotCue } from '../types'
-import { X, Pencil } from 'lucide-react'
+import { X, Pencil, Play } from 'lucide-react'
 
 interface Props {
   cue: HotCue
   onEdit: () => void
   onDelete: () => void
+  onSetIdle?: () => void
+  isIdle?: boolean
 }
 
 // Matches the field captions in CueCardEdit.
@@ -15,9 +17,21 @@ const captionCls = 'text-[9px] uppercase tracking-wide text-[#777] leading-none'
 // buttons. Shared by the list view and the graph nodes; the outer container
 // (sizing, highlight, click-to-play) lives in each view. Buttons carry `nodrag`
 // so clicking them never starts a React Flow node drag.
-export default function CueCardFace({ cue, onEdit, onDelete }: Props) {
+export default function CueCardFace({ cue, onEdit, onDelete, onSetIdle, isIdle }: Props) {
   return (
     <>
+      {onSetIdle && (
+        <button
+          className={`nodrag absolute top-1 right-20 bg-transparent border-none cursor-pointer leading-none rounded-[3px] ${isIdle ? 'text-[#4a8] hover:text-[#6cf]' : 'text-[#444] hover:text-[#888]'}`}
+          title="Set as idle (loops when no video selected)"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSetIdle()
+          }}
+        >
+          <Play size={12} />
+        </button>
+      )}
       <button
         className="nodrag absolute top-1 right-5 bg-transparent border-none text-[#444] cursor-pointer leading-none rounded-[3px] hover:text-white"
         title="Edit key, start, label"

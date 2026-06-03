@@ -45,8 +45,12 @@ export default function HotCuePlayer() {
 
   const [isDragOver, setIsDragOver] = useState(false)
 
+  // Idle cue that plays on loop when no video is explicitly selected
+  const [idleCueId, setIdleCueId] = useState<string | null>(null)
+
   // Cue waiting to be seeked + played once its clip has loaded.
   const pendingCueRef = useRef<HotCue | null>(null)
+  const queuedCueRef = useRef<HotCue | null>(null)
 
   function applyPendingCue() {
     const vid = videoRef.current
@@ -57,7 +61,52 @@ export default function HotCuePlayer() {
     pendingCueRef.current = null
   }
 
+  function handleVideoEnded() {
+    const vid = videoRef.current
+    if (!vid) return
+
+    // If there's a queued cue, play it
+    if (queuedCueRef.current) {
+      const queued = queuedCueRef.current
+      queuedCueRef.current = null
+      setPlayingId(queued.id)
+      pendingCueRef.current = queued
+      if (activeIdRef.current === queued.id) {
+        applyPendingCue()
+      } else {
+        setSelectedId(queued.id)
+      }
+    }
+    // If there's an idle cue and it's not already selected, play it
+    else if (idleCueId && activeIdRef.current !== idleCueId) {
+      const idleCue = cues.find((c) => c.id === idleCueId)
+      if (idleCue) {
+        setPlayingId(null) // Clear playing highlight for idle
+        pendingCueRef.current = idleCue
+        if (activeIdRef.current === idleCueId) {
+          applyPendingCue()
+        } else {
+          setSelectedId(idleCueId)
+        }
+      }
+    }
+    // Otherwise just stop
+    else {
+      setPlayingId(null)
+    }
+  }
+
   function handleCuePress(cue: HotCue) {
+    const vid = videoRef.current
+    const isPlaying = vid && !vid.paused && !vid.ended
+
+    // If something is playing, queue this cue instead
+    if (isPlaying) {
+      queuedCueRef.current = cue
+      return
+    }
+
+    // Otherwise play immediately
     setPlayingId(cue.id)
     pendingCueRef.current = cue
     if (activeIdRef.current === cue.id) {
@@ -216,6 +265,7 @@ export default function HotCuePlayer() {
             controls
             src={activeSrc}
             onLoadedMetadata={applyPendingCue}
+            onEnded={handleVideoEnded}
           />
         </div>
 
@@ -310,7 +360,13 @@ export default function HotCuePlayer() {
                     setEditingIndex(i)
                   }}
                 >
-                  <CueCardFace cue={cue} onEdit={() => setEditingIndex(i)} onDelete={() => handleDeleteCue(i)} />
+                  <CueCardFace 
+                    cue={cue} 
+                    onEdit={() => setEditingIndex(i)} 
+                    onDelete={() => handleDeleteCue(i)}
+                    onSetIdle={() => setIdleCueId(cue.id)}
+                    isIdle={idleCueId === cue.id}
+                  />
                 </div>
               ),
             )}
