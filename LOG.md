@@ -6,7 +6,7 @@ The controller can escape the game mode with a hot cue, named `start/ welcome/ h
 
 ## 2026-06-03 (Tic Tac Toe) (8)
 
-Bug fix: 
+Bug fix: There was a hydration error. The issue was the saved hot cues: the server rendered with no localStorage, but the client’s first render immediately loaded saved cues, so the HTML didn’t match. Now, the first server/client render matches, then it loads saved cues right after hydration.
 
 ## 2026-06-03 (Tic Tac Toe) (7)
 
