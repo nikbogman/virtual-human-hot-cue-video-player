@@ -37,5 +37,12 @@ export function useSyncBroadcast(videoRef: React.RefObject<HTMLVideoElement | nu
     window.open('/monitor', '_blank', 'width=960,height=600')
   }
 
-  return { openMonitor }
+  function showTicTacToe() {
+    localStorage.setItem('monitorMode', 'tic-tac-toe')
+    const channel = new BroadcastChannel('video_sync')
+    channel.postMessage({ type: 'show_tic_tac_toe' })
+    channel.close()
+  }
+
+  return { openMonitor, showTicTacToe }
 }

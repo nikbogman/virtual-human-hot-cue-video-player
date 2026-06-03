@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (6)
+
+Tic tac toe moved into the Next.js app: `src/components/TicTacToe.tsx` + `src/styles/tic-tac-toe.css`. `/monitor` shows the game (background video, grid, computer X, Yes/No). Static prototype is still in `public/tic-tac-toe/`. Currently the commander uses a key named `tic-tac-toe/ tic tac toe ..` to trigger the game. No other videos can be triggered by hot cues while the game is running. 
+
 ## 2026-06-03 (Tic Tac Toe) (5)
 
 After the end of the game, buttons with Yes / No appear. Yes starts a new game, no hides the grid. No explanation text added, since the VH will ask about directions and give instructions. 

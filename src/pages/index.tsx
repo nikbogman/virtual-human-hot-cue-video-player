@@ -13,6 +13,10 @@ const btnCls =
   'text-[13px] whitespace-nowrap inline-flex items-center gap-1.5 leading-none h-8 ' +
   'hover:bg-[#2e2e2e] hover:border-[#555] hover:text-white'
 
+function startsTicTacToe(cue: HotCue) {
+  return /tic[-\s]?tac[-\s]?toe/i.test(cue.label)
+}
+
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -20,19 +24,20 @@ export default function HotCuePlayer() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
+  const { openMonitor, showTicTacToe } = useSyncBroadcast(videoRef)
+
   function handleCuePress(cue: HotCue) {
     const vid = videoRef.current
     if (!vid) return
     vid.currentTime = cue.startTime
     void vid.play()
+    if (startsTicTacToe(cue)) showTicTacToe()
   }
 
   const { cues, editingIndex, setEditingIndex, activeIndex, closeEdit, updateCue, addCue, deleteCue, clearCues, exportCues, importCues } =
     useHotCues(handleCuePress)
 
   const importInputRef = useRef<HTMLInputElement>(null)
-
-  const { openMonitor } = useSyncBroadcast(videoRef)
 
   useEffect(() => {
     getStoredVideo().then((file) => {
