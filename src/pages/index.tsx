@@ -3,7 +3,9 @@ import Head from 'next/head'
 import dynamic from 'next/dynamic'
 import CueCardEdit from '../components/CueCardEdit'
 import CueCardFace from '../components/CueCardFace'
-import type { CueGraphHandle } from '../components/CueGraph'
+import TicTacToe from '../components/games/TicTacToe'
+import Connect4 from '../components/games/Connect4'
+import RockPaperScissors from '../components/games/RockPaperScissors'
 import { useHotCues } from '../hooks/useHotCues'
 import { useCueGraph } from '../hooks/useCueGraph'
 import { useSyncBroadcast } from '../hooks/useSyncBroadcast'
@@ -24,9 +26,11 @@ export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
-  const cueGraphRef = useRef<CueGraphHandle>(null)
 
   const [view, setView] = useState<'list' | 'graph'>('list')
+  const [appMode, setAppMode] = useState<'home' | 'scenario' | 'game'>('home')
+  const [showGameOptions, setShowGameOptions] = useState(false)
+  const [selectedGame, setSelectedGame] = useState<'tic' | 'connect4' | 'rps' | null>(null)
 
   // One blob URL per clip id, kept in sync with the cue list.
   const [urls, setUrls] = useState<Record<string, string>>({})
@@ -175,6 +179,44 @@ export default function HotCuePlayer() {
     `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${active ? 'bg-[#2e2e2e] text-white' : 'bg-[#1a1a1a] text-[#888] hover:text-[#ccc]'
     }`
 
+  if (appMode === 'home') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0b0b0b] text-[#eee]">
+        <div className="max-w-2xl w-full p-10 bg-[#0f0f0f] rounded-lg text-center">
+          <h1 className="text-4xl mb-6">Welcome</h1>
+          <div className="flex justify-center gap-6 mb-6">
+            <button
+              className="px-6 py-3 bg-[#222] rounded text-lg"
+              onClick={() => setShowGameOptions((s) => !s)}
+            >
+              Play Game
+            </button>
+            <button
+              className="px-6 py-3 bg-[#222] rounded text-lg"
+              onClick={() => setAppMode('scenario')}
+            >
+              Play Scenario
+            </button>
+          </div>
+          {showGameOptions && (
+            <div className="flex justify-center gap-4">
+              <button className={btnCls} onClick={() => { setSelectedGame('tic'); setAppMode('game') }}>Tic Tac Toe</button>
+              <button className={btnCls} onClick={() => { setSelectedGame('connect4'); setAppMode('game') }}>Connect 4</button>
+              <button className={btnCls} onClick={() => { setSelectedGame('rps'); setAppMode('game') }}>Rock Paper Scissors</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (appMode === 'game' && selectedGame) {
+    const goBack = () => { setSelectedGame(null); setAppMode('home') }
+    if (selectedGame === 'tic') return <TicTacToe onBack={goBack} />
+    if (selectedGame === 'connect4') return <Connect4 onBack={goBack} />
+    return <RockPaperScissors onBack={goBack} />
+  }
+
   return (
     <>
       <Head>
@@ -304,14 +346,18 @@ export default function HotCuePlayer() {
               <Trash2 size={14} />
               Clear all
             </button>
-            {view === 'graph' && (
+            {appMode === 'scenario' && (
               <button
-                className={`${btnCls} hover:border-[#c44] hover:text-[#c44]`}
-                onClick={(e) => { e.stopPropagation(); cueGraphRef.current?.deleteSelected() }}
+                className={`${btnCls} hover:border-[#4c9] hover:text-[#9f9]`}
+                onClick={(e) => { e.stopPropagation(); setAppMode('home'); setView('list') }}
               >
-                <Trash2 size={14} />
-                Clear selected
+                Home
               </button>
+            )}
+            {view === 'graph' && (
+              <div className="text-[#888] text-xs italic px-2 py-1 rounded border border-[#2a2a2a] bg-[#111]">
+                Drag a node into the trash can at the bottom right to delete it.
+              </div>
             )}
           </div>
         </div>
@@ -369,7 +415,6 @@ export default function HotCuePlayer() {
         ) : (
           <div className="flex-1 min-h-0 mb-3 rounded overflow-hidden border border-[#222]">
             <CueGraph
-              ref={cueGraphRef}
               cues={cues}
               positions={graph.positions}
               links={graph.links}
