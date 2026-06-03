@@ -121,6 +121,35 @@ Video file — persisted in IndexedDB under a fixed key
 
 ---
 
+## Simple prototype (`public/simple.html`)
+
+A minimal standalone HTML page for quick experiments. No build step, no framework.
+
+### Layout
+
+```
+┌────────────────────────────────────────┐
+│  full-screen background video          │
+│                                        │
+│            ┌──────────┐                │
+│            │   box    │  ← foreground  │
+│            └──────────┘                │
+└────────────────────────────────────────┘
+```
+
+### Behaviour
+
+- Background: `<video>` fills the viewport (`object-fit: cover`), autoplay, muted, looped.
+- Foreground: a centred white box (200×200px).
+- Click the box: toggles a tick (`✓`) — first click shows it, second click removes it.
+
+### Assets
+
+- Place a file named `background.mp4` in `public/` (same folder as `simple.html`).
+- With the dev server running, open [http://localhost:3000/simple.html](http://localhost:3000/simple.html).
+
+---
+
 ## Out of scope
 
 - Cloud storage video links (Google Drive, OneDrive, etc.)

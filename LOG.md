@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-03 (2)
+
+Click now toggles the tick off on a second click.
+
+## 2026-06-03
+
+Added `public/simple.html` — a minimal page with a full-screen background video and a centred clickable box that shows a tick on click. Documented in `SPEC.md` under **Simple prototype**, developed on a new branch `feat/video-overlay`.
+
 ## 2026-05-25 (2)
 
 Extracted all hot-cue state and logic into a `useHotCues` hook (`src/hooks/useHotCues.ts`). Renamed `Segment` to `HotCue` throughout. The `index.tsx` page now only handles video loading and layout.
