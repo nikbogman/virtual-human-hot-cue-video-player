@@ -24,14 +24,15 @@ export default function HotCuePlayer() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const { openMonitor, showTicTacToe } = useSyncBroadcast(videoRef)
+  const { openMonitor, showTicTacToe, setTicTacToeBackground } = useSyncBroadcast(videoRef)
 
   function handleCuePress(cue: HotCue) {
     const vid = videoRef.current
     if (!vid) return
     vid.currentTime = cue.startTime
     void vid.play()
-    if (startsTicTacToe(cue)) showTicTacToe()
+    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime)
+    else setTicTacToeBackground(cue.startTime)
   }
 
   const { cues, editingIndex, setEditingIndex, activeIndex, closeEdit, updateCue, addCue, deleteCue, clearCues, exportCues, importCues } =

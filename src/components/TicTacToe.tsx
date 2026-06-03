@@ -27,6 +27,11 @@ function getWinner(board: string[]) {
   return null
 }
 
+interface Props {
+  backgroundCue?: { startTime: number; version: number } | null
+  backgroundSrc?: string
+}
+
 function endMessage(board: string[]) {
   const winner = getWinner(board)
   if (winner) return winner + ' wins!'
@@ -34,7 +39,7 @@ function endMessage(board: string[]) {
   return null
 }
 
-export default function TicTacToe() {
+export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.mp4' }: Props) {
   const [board, setBoard] = useState(boardWithComputerOpening)
   const [humanTurn, setHumanTurn] = useState(true)
   const [status, setStatus] = useState('')
@@ -42,6 +47,7 @@ export default function TicTacToe() {
   const [showGrid, setShowGrid] = useState(true)
   const gameOverRef = useRef(false)
   const boardRef = useRef(board)
+  const backgroundRef = useRef<HTMLVideoElement>(null)
   const thinkTimerRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
@@ -95,6 +101,13 @@ export default function TicTacToe() {
 
   useEffect(() => () => clearTimeout(thinkTimerRef.current), [])
 
+  useEffect(() => {
+    const vid = backgroundRef.current
+    if (!vid || !backgroundCue) return
+    vid.currentTime = backgroundCue.startTime
+    void vid.play()
+  }, [backgroundCue])
+
   function onCellClick(index: number) {
     if (gameOverRef.current || !humanTurn || board[index]) return
 
@@ -114,12 +127,18 @@ export default function TicTacToe() {
   return (
     <div className="ttt-root">
       <video
+        ref={backgroundRef}
         className="ttt-bg"
-        src="/background.mp4"
+        src={backgroundSrc}
         autoPlay
         muted
         loop
         playsInline
+        onLoadedMetadata={() => {
+          if (!backgroundCue || !backgroundRef.current) return
+          backgroundRef.current.currentTime = backgroundCue.startTime
+          void backgroundRef.current.play()
+        }}
       />
 
       <p className="ttt-status">{status}</p>

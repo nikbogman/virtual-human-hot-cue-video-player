@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import TicTacToe from '../components/TicTacToe'
 import { getStoredVideo } from '../lib/videoDB'
@@ -10,9 +10,25 @@ export default function Monitor() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [synced, setSynced] = useState(false)
   const [mode, setMode] = useState<MonitorMode>('video')
+  const [gameBackgroundCue, setGameBackgroundCue] = useState<{ startTime: number; version: number } | null>(null)
+  const [gameSession, setGameSession] = useState(0)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
   const pendingRef = useRef<{ currentTime: number; isPlaying: boolean } | null>(null)
+  const modeRef = useRef<MonitorMode>('video')
+
+  const loadStoredVideo = useCallback(async () => {
+    const file = await getStoredVideo()
+    if (!file) return
+    setVideoSrc((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+  }, [])
+
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
 
   useEffect(() => {
     const channel = new BroadcastChannel('video_sync')
@@ -24,7 +40,22 @@ export default function Monitor() {
       if (data.type === 'show_tic_tac_toe') {
         localStorage.setItem('monitorMode', 'tic-tac-toe')
         setMode('tic-tac-toe')
+        setGameSession((prev) => prev + 1)
+        setGameBackgroundCue((prev) => ({
+          startTime: data.startTime,
+          version: (prev?.version ?? 0) + 1,
+        }))
         vid?.pause()
+        void loadStoredVideo()
+        return
+      }
+
+      if (data.type === 'set_tic_tac_toe_background') {
+        if (modeRef.current !== 'tic-tac-toe') return
+        setGameBackgroundCue((prev) => ({
+          startTime: data.startTime,
+          version: (prev?.version ?? 0) + 1,
+        }))
         return
       }
 
@@ -46,7 +77,13 @@ export default function Monitor() {
     })
 
     return () => channel.close()
-  }, [])
+  }, [loadStoredVideo])
+
+  useEffect(() => {
+    return () => {
+      if (videoSrc) URL.revokeObjectURL(videoSrc)
+    }
+  }, [videoSrc])
 
   function applyPending(vid: HTMLVideoElement) {
     const p = pendingRef.current
@@ -59,12 +96,12 @@ export default function Monitor() {
   async function handleSync() {
     syncedRef.current = true
     setSynced(true)
+    await loadStoredVideo()
     if (localStorage.getItem('monitorMode') === 'tic-tac-toe') {
       setMode('tic-tac-toe')
+      setGameSession((prev) => prev + 1)
       return
     }
-    const file = await getStoredVideo()
-    if (file) setVideoSrc(URL.createObjectURL(file))
     channelRef.current?.postMessage({ type: 'request_initial_state' })
   }
 
@@ -75,7 +112,11 @@ export default function Monitor() {
       </Head>
       <div className="h-screen bg-black relative overflow-hidden">
         {mode === 'tic-tac-toe' ? (
-          <TicTacToe />
+          <TicTacToe
+            key={gameSession}
+            backgroundCue={gameBackgroundCue}
+            backgroundSrc={videoSrc ?? undefined}
+          />
         ) : (
           <video
             ref={videoRef}

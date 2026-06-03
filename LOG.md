@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (7)
+
+Tic tac toe game is triggered by a hot cue named `tic tac toe/ tic-tac-toe`. The game restarts every time the key with the game assigned id pressed. Other videos can play in the background. 
+
 ## 2026-06-03 (Tic Tac Toe) (6)
 
 Tic tac toe moved into the Next.js app: `src/components/TicTacToe.tsx` + `src/styles/tic-tac-toe.css`. `/monitor` shows the game (background video, grid, computer X, Yes/No). Static prototype is still in `public/tic-tac-toe/`. Currently the commander uses a key named `tic-tac-toe/ tic tac toe ..` to trigger the game. No other videos can be triggered by hot cues while the game is running. 
