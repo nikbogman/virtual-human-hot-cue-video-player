@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (9)
+
+The controller can escape the game mode with a hot cue, named `start/ welcome/ home/ reset`. 
+
+## 2026-06-03 (Tic Tac Toe) (8)
+
+Bug fix: 
+
 ## 2026-06-03 (Tic Tac Toe) (7)
 
 Tic tac toe game is triggered by a hot cue named `tic tac toe/ tic-tac-toe`. The game restarts every time the key with the game assigned id pressed. Other videos can play in the background. 

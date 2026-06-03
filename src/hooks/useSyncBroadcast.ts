@@ -44,11 +44,18 @@ export function useSyncBroadcast(videoRef: React.RefObject<HTMLVideoElement | nu
     channel.close()
   }
 
+  function showWelcome(startTime: number) {
+    localStorage.setItem('monitorMode', 'video')
+    const channel = new BroadcastChannel('video_sync')
+    channel.postMessage({ type: 'show_welcome', startTime })
+    channel.close()
+  }
+
   function setTicTacToeBackground(startTime: number) {
     const channel = new BroadcastChannel('video_sync')
     channel.postMessage({ type: 'set_tic_tac_toe_background', startTime })
     channel.close()
   }
 
-  return { openMonitor, showTicTacToe, setTicTacToeBackground }
+  return { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground }
 }

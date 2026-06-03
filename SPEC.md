@@ -14,6 +14,7 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 2. As a tester, I want to configure hot cues myself by assigning a key, a start time, and a label to each one, so that I can set up the interaction before a session.
 3. As a tester, I want to load a video by uploading a file, so that I am not dependent on a specific machine or file path.
 4. As a tester, I want to open a sync monitor screen in a separate browser window that mirrors playback events from the main screen, so that I can show the video on the holobox without exposing the controls.
+5. As a tester, I want to switch the monitor between a welcome/video state and the tic-tac-toe game state, so that I can return to the beginning of the interaction after a game segment.
 
 ---
 
@@ -25,6 +26,8 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 - Hot cue configuration: each cue has a key, a start time (in seconds), a label, and a color; cues can be cleared in bulk
 - Video loading: local file upload; file is persisted to IndexedDB so it can be accessed by the monitor window without re-uploading
 - Sync screen: a separate browser window that mirrors playback state (play, pause, seek, segment trigger) via BroadcastChannel; no WebSocket or server required
+- Monitor mode switching: a tic-tac-toe cue switches the monitor to the game, while a welcome/start/home/reset cue or the Welcome button returns the monitor to the normal video state
+- Manual game background changes: while tic-tac-toe is active, non-mode hot cues manually jump the game background video to the cue timestamp
 
 ---
 
@@ -59,6 +62,7 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 - No hot cue bar, no controls visible
 - Reacts to BroadcastChannel messages from the main screen
 - On first open (or after refresh): shows a "Click to sync" overlay to allow the browser to start playback (required by autoplay policy)
+- Can display either the synced video/welcome state or the tic-tac-toe game state
 
 ---
 
@@ -107,13 +111,23 @@ Video file — persisted in IndexedDB under a fixed key
 - Pressing a configured key seeks the video to the hot cue's start time and begins playback
 - The matching card flashes briefly as visual confirmation
 - Key presses are ignored while a text input has focus
+- Labels containing `tic-tac-toe` or `tic tac toe` switch the monitor to a fresh tic-tac-toe game
+- Labels containing `welcome`, `start`, `home`, or `reset` return the monitor to video mode at that cue's start time
+- While the monitor is in tic-tac-toe mode, other hot cues manually change the game background video to that cue's start time
+
+### Monitor welcome control
+- The main screen includes a Tailwind-styled Welcome button in the controls bar
+- Clicking Welcome returns the monitor to the normal video state at `0:00`
+- This provides a quick reset without requiring a configured hot cue
 
 ### Sync screen
 - Opened as a separate browser window (e.g. via an "Open monitor" button)
-- Receives BroadcastChannel messages: `play`, `pause`, `seek`
+- Receives BroadcastChannel messages: `play`, `pause`, `seek`, `show_tic_tac_toe`, `show_welcome`, `set_tic_tac_toe_background`
 - On load: shows a "Click to sync" overlay; clicking it dismisses the overlay and puts the video into a ready state so autoplay can proceed
 - Video renders without native player controls (`controls` attribute omitted)
 - When the monitor syncs, the main screen mutes its video automatically to prevent audio echo
+- `show_tic_tac_toe` persists game mode and remounts a fresh game session
+- `show_welcome` persists video mode and seeks the monitor video to the requested welcome timestamp
 
 ### Persistence
 - Hot cues are saved to `localStorage` and restored on the next visit

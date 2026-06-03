@@ -50,6 +50,16 @@ export default function Monitor() {
         return
       }
 
+      if (data.type === 'show_welcome') {
+        localStorage.setItem('monitorMode', 'video')
+        pendingRef.current = { currentTime: data.startTime, isPlaying: true }
+        setGameBackgroundCue(null)
+        setMode('video')
+        void loadStoredVideo()
+        if (vid?.readyState && vid.readyState >= 1) applyPending(vid)
+        return
+      }
+
       if (data.type === 'set_tic_tac_toe_background') {
         if (modeRef.current !== 'tic-tac-toe') return
         setGameBackgroundCue((prev) => ({

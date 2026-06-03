@@ -6,7 +6,7 @@ import { useSyncBroadcast } from '../hooks/useSyncBroadcast'
 import { formatTime } from '../lib/time'
 import { storeVideo, getStoredVideo, clearStoredVideo } from '../lib/videoDB'
 import type { HotCue } from '../types'
-import { X, Trash2, Monitor, Upload, Download, Plus } from 'lucide-react'
+import { X, Trash2, Monitor, Upload, Download, Plus, Home } from 'lucide-react'
 
 const btnCls =
   'px-3.5 border border-[#3a3a3a] bg-[#242424] text-[#ddd] rounded cursor-pointer ' +
@@ -17,6 +17,10 @@ function startsTicTacToe(cue: HotCue) {
   return /tic[-\s]?tac[-\s]?toe/i.test(cue.label)
 }
 
+function returnsToWelcome(cue: HotCue) {
+  return /\b(welcome|start|home|reset)\b/i.test(cue.label)
+}
+
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -24,7 +28,7 @@ export default function HotCuePlayer() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const { openMonitor, showTicTacToe, setTicTacToeBackground } = useSyncBroadcast(videoRef)
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } = useSyncBroadcast(videoRef)
 
   function handleCuePress(cue: HotCue) {
     const vid = videoRef.current
@@ -32,6 +36,7 @@ export default function HotCuePlayer() {
     vid.currentTime = cue.startTime
     void vid.play()
     if (startsTicTacToe(cue)) showTicTacToe(cue.startTime)
+    else if (returnsToWelcome(cue)) showWelcome(cue.startTime)
     else setTicTacToeBackground(cue.startTime)
   }
 
@@ -118,7 +123,7 @@ export default function HotCuePlayer() {
         </div>
 
         {/* Controls bar */}
-        <div className="flex items-center justify-between mt-6 mb-3 px-3 py-2 bg-[#1a1a1a] rounded min-h-10 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 mt-6 mb-3 px-3 py-2 bg-[#1a1a1a] rounded min-h-10 flex-shrink-0">
           <button
             className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
             disabled={!videoSrc}
@@ -127,14 +132,24 @@ export default function HotCuePlayer() {
             <Trash2 size={14} />
             Remove video
           </button>
-          <button
-            className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
-            disabled={!videoSrc}
-            onClick={(e) => { e.stopPropagation(); openMonitor() }}
-          >
-            <Monitor size={14} />
-            Open monitor
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
+              disabled={!videoSrc}
+              onClick={(e) => { e.stopPropagation(); showWelcome(0) }}
+            >
+              <Home size={14} />
+              Welcome
+            </button>
+            <button
+              className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
+              disabled={!videoSrc}
+              onClick={(e) => { e.stopPropagation(); openMonitor() }}
+            >
+              <Monitor size={14} />
+              Open monitor
+            </button>
+          </div>
         </div>
 
         {/* Cue bar */}
