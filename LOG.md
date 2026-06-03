@@ -1,8 +1,16 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (3)
+
+Win detection: first player to get 3 in a row, column, or diagonal wins. Game stops and shows “X wins!” or “O wins!”.
+
+## 2026-06-03 (Tic Tac Toe) (2)
+
+Turns alternate between X and O on each click (X goes first).
+
 ## 2026-06-03 (Tic Tac Toe)
 
-Step 1: added `public/tic-tac-toe/` with separate `index.html`, `style.css`, and `main.js` in a new branch `feat/tic-tac-toe-game`. Full-screen background video (`../background.mp4`), centred 3×3 grid, click an empty square to place an X. No turns, win detection, or O yet.
+Added `public/tic-tac-toe/` with separate `index.html`, `style.css`, and `main.js` in a new branch `feat/tic-tac-toe-game`. Full-screen background video (`../background.mp4`), centred 3×3 grid, click an empty square to place an X. No turns, win detection, or O yet.
 
 ## 2026-05-25 (2)
 
