@@ -6,18 +6,18 @@ const WIN_LINES = [
   [0, 4, 8], [2, 4, 6],             // diagonals
 ]
 
-// Who plays next (X or O)
-let currentPlayer = 'X'
-
-// Whether the game is over
+// Human plays O. Computer plays X.
+let currentPlayer = 'O'
 let gameOver = false
+
+// How long to wait after you play before the computer moves (milliseconds)
+const THINK_DELAY = 800
 
 // Grab all 9 squares and the message above the grid
 const cells = document.querySelectorAll('.cell')
 const status = document.getElementById('status')
 
-// Check if X or O has won
-// Return 'X', 'O', or null if no winner yet
+// Check if X or O has won. Returns 'X', 'O', or null (no winner yet).
 function getWinner() {
   // Copy all 9 squares into one list, in order: top-left (0) to bottom-right (8)
   // Each entry is 'X', 'O', or '' (empty). Same numbering as WIN_LINES
@@ -35,24 +35,68 @@ function getWinner() {
   return null // went through all 8 lines; no winner yet
 }
 
-// When you click a square...
+// If someone won, stop the game and show the message
+function checkForWinner() {
+  const winner = getWinner()
+  if (winner) {
+    gameOver = true
+    status.textContent = winner + ' wins!'
+    return true
+  }
+  return false
+}
+
+// Computer (X): pick a random empty square and place X there
+function computerMove() {
+  if (gameOver) return
+
+  const empty = Array.from(cells).filter((cell) => !cell.textContent)
+  if (empty.length === 0) return
+
+  const pick = empty[Math.floor(Math.random() * empty.length)]
+  pick.textContent = 'X'
+
+  checkForWinner()
+}
+
+// Wait a moment, then let the computer play
+function scheduleComputerMove() {
+  currentPlayer = 'X'
+
+  setTimeout(function () {
+    if (gameOver) return
+    computerMove()
+    if (!gameOver) {
+      currentPlayer = 'O'
+      status.textContent = ''
+    }
+  }, THINK_DELAY)
+}
+
+// Human (O): click a square to play
 cells.forEach(function (cell) {
   cell.addEventListener('click', function () {
-    // Ignore clicks if the game ended or this square is already taken
-    if (gameOver || cell.textContent) return
+    // Only your turn when it's O, and only on empty squares
+    if (gameOver || currentPlayer !== 'O' || cell.textContent) return
 
-    // Put X or O in the square
-    cell.textContent = currentPlayer
+    cell.textContent = 'O'
 
-    // Display the winner if there is one
-    const winner = getWinner()
-    if (winner) {
-      gameOver = true
-      status.textContent = winner + ' wins!'
-      return
-    }
+    if (checkForWinner()) return
 
-    // Swap to the other player for the next click
-    currentPlayer = currentPlayer === 'X' ? 'O' : 'X'
+    // Pause so it feels like the computer is thinking, then place X
+    currentPlayer = 'X'
+
+    setTimeout(function () {
+      if (gameOver) return
+      computerMove()
+      if (!gameOver) {
+        currentPlayer = 'O'
+        status.textContent = ''
+      }
+    }, THINK_DELAY)
   })
 })
+
+// X goes first — computer opens after the same thinking delay
+currentPlayer = 'X'
+scheduleComputerMove()

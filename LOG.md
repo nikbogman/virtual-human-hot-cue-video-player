@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (4)
+
+X is the computer: places on a random empty square after each human (O) move. Starts the game with the first X. 800ms “thinking” delay before every computer move, including the opening one. 
+
 ## 2026-06-03 (Tic Tac Toe) (3)
 
 Win detection: first player to get 3 in a row, column, or diagonal wins. Game stops and shows “X wins!” or “O wins!”.
