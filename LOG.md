@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-03 (Tic Tac Toe) (5)
+
+After the end of the game, buttons with Yes / No appear. Yes starts a new game, no hides the grid. No explanation text added, since the VH will ask about directions and give instructions. 
+
 ## 2026-06-03 (Tic Tac Toe) (4)
 
 X is the computer: places on a random empty square after each human (O) move. Starts the game with the first X. 800ms “thinking” delay before every computer move, including the opening one. 

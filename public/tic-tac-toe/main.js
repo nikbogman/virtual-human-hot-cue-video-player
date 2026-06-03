@@ -16,6 +16,10 @@ const THINK_DELAY = 800
 // Grab all 9 squares and the message above the grid
 const cells = document.querySelectorAll('.cell')
 const status = document.getElementById('status')
+const choices = document.getElementById('choices')
+const grid = document.getElementById('grid')
+const btnYes = document.getElementById('btn-yes')
+const btnNo = document.getElementById('btn-no')
 
 // Check if X or O has won. Returns 'X', 'O', or null (no winner yet).
 function getWinner() {
@@ -29,18 +33,33 @@ function getWinner() {
     // board[a] === board[b] — first and second match (both X or both O)
     // board[a] === board[c] — first and third match too, so all three are the same
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      return board[a] // 'X' or 'O' — whoever completed this line
+      return board[a]
     }
   }
-  return null // went through all 8 lines; no winner yet
+  return null
 }
 
-// If someone won, stop the game and show the message
-function checkForWinner() {
+// True when every square is filled
+function isBoardFull() {
+  return Array.from(cells).every((cell) => cell.textContent)
+}
+
+// Stop the game and show Yes / No buttons (win or draw)
+function endGame(message) {
+  gameOver = true
+  status.textContent = message
+  choices.classList.remove('hidden')
+}
+
+// Check for a winner or a full board with no winner
+function checkGameEnd() {
   const winner = getWinner()
   if (winner) {
-    gameOver = true
-    status.textContent = winner + ' wins!'
+    endGame(winner + ' wins!')
+    return true
+  }
+  if (isBoardFull()) {
+    endGame('Draw!')
     return true
   }
   return false
@@ -56,7 +75,7 @@ function computerMove() {
   const pick = empty[Math.floor(Math.random() * empty.length)]
   pick.textContent = 'X'
 
-  checkForWinner()
+  checkGameEnd()
 }
 
 // Wait a moment, then let the computer play
@@ -73,7 +92,26 @@ function scheduleComputerMove() {
   }, THINK_DELAY)
 }
 
-// Human (O): click a square to play
+// Reset everything and let the computer open with X (after the thinking delay)
+function startNewGame() {
+  gameOver = false
+  choices.classList.add('hidden')
+  grid.classList.remove('hidden')
+  cells.forEach((cell) => { cell.textContent = '' })
+  status.textContent = ''
+  currentPlayer = 'X'
+  scheduleComputerMove()
+}
+
+btnYes.addEventListener('click', startNewGame)
+
+// No — hide the buttons and the playing board (VH will ask what they want to do next)
+btnNo.addEventListener('click', function () {
+  choices.classList.add('hidden')
+  grid.classList.add('hidden')
+  status.textContent = ''
+})
+
 cells.forEach(function (cell) {
   cell.addEventListener('click', function () {
     // Only your turn when it's O, and only on empty squares
@@ -81,22 +119,10 @@ cells.forEach(function (cell) {
 
     cell.textContent = 'O'
 
-    if (checkForWinner()) return
+    if (checkGameEnd()) return
 
-    // Pause so it feels like the computer is thinking, then place X
-    currentPlayer = 'X'
-
-    setTimeout(function () {
-      if (gameOver) return
-      computerMove()
-      if (!gameOver) {
-        currentPlayer = 'O'
-        status.textContent = ''
-      }
-    }, THINK_DELAY)
+    scheduleComputerMove()
   })
 })
 
-// X goes first — computer opens after the same thinking delay
-currentPlayer = 'X'
-scheduleComputerMove()
+startNewGame()
