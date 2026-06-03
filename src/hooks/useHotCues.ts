@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import type { HotCue } from '../types'
+import { storeVideo, deleteVideo, clearAllVideos } from '../lib/videoDB'
+
+function nameWithoutExt(name: string): string {
+  return name.replace(/\.[^./\\]+$/, '')
+}
 
 export function useHotCues(onCuePress: (cue: HotCue) => void) {
   const [cues, setCues] = useState<HotCue[]>([])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const cuesRef = useRef(cues)
   cuesRef.current = cues
@@ -30,41 +34,20 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
       if (e.key === 'Escape') {
-        const idx = editingIndexRef.current
-        if (idx === null) return
-        setCues((prev) => {
-          if (!prev[idx]?.key) {
-            const next = [...prev]
-            next.splice(idx, 1)
-            return next
-          }
-          return prev
-        })
-        setEditingIndex(null)
+        if (editingIndexRef.current !== null) setEditingIndex(null)
         return
       }
 
       const idx = cuesRef.current.findIndex((c) => c.key === e.key.toLowerCase())
       if (idx === -1) return
       onCuePressRef.current(cuesRef.current[idx])
-      setActiveIndex(idx)
-      setTimeout(() => setActiveIndex(null), 300)
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
   }, [])
 
   function closeEdit() {
-    const idx = editingIndexRef.current
-    if (idx === null) return
-    if (!cuesRef.current[idx]?.key) {
-      setCues((prev) => {
-        const next = [...prev]
-        next.splice(idx, 1)
-        return next
-      })
-    }
-    setEditingIndex(null)
+    if (editingIndexRef.current !== null) setEditingIndex(null)
   }
 
   function updateCue(index: number, patch: Partial<HotCue>) {
@@ -75,21 +58,33 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     })
   }
 
-  function addCue() {
-    const idx = editingIndexRef.current
-    const current = cuesRef.current
-    const base = idx !== null && !current[idx]?.key ? current.filter((_, i) => i !== idx) : [...current]
-    const newCues = [...base, { key: '', startTime: 0, label: '' }]
-    setCues(newCues)
-    setEditingIndex(newCues.length - 1)
+  // Each uploaded video becomes its own cue (1:1). The file is persisted to
+  // IndexedDB under the cue id so the monitor window can read it independently.
+  async function addClips(files: FileList | File[]) {
+    const videos = Array.from(files).filter((f) => f.type.startsWith('video/'))
+    if (videos.length === 0) return
+
+    const newCues: HotCue[] = []
+    for (const file of videos) {
+      const id = crypto.randomUUID()
+      await storeVideo(id, file)
+      newCues.push({ id, key: '', startTime: 0, title: nameWithoutExt(file.name), label: '', fileName: file.name })
+    }
+
+    const firstNewIndex = cuesRef.current.length
+    setCues([...cuesRef.current, ...newCues])
+    setEditingIndex(firstNewIndex) // open the first new card to assign a key
   }
 
   function deleteCue(index: number) {
+    const cue = cuesRef.current[index]
+    if (cue) void deleteVideo(cue.id)
     setCues((prev) => prev.filter((_, i) => i !== index))
     setEditingIndex(null)
   }
 
   function clearCues() {
+    void clearAllVideos()
     setCues([])
     setEditingIndex(null)
   }
@@ -110,12 +105,16 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
       try {
         const data = JSON.parse(e.target?.result as string)
         if (!Array.isArray(data)) return
-        const valid = data.filter(
-          (item) =>
-            typeof item.key === 'string' &&
-            typeof item.startTime === 'number' &&
-            typeof item.label === 'string'
-        )
+        const valid: HotCue[] = data
+          .filter(
+            (item) =>
+              typeof item.id === 'string' &&
+              typeof item.key === 'string' &&
+              typeof item.startTime === 'number' &&
+              typeof item.label === 'string' &&
+              typeof item.fileName === 'string'
+          )
+          .map((item) => ({ ...item, title: typeof item.title === 'string' ? item.title : '' }))
         setCues(valid)
         setEditingIndex(null)
       } catch {}
@@ -123,5 +122,5 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     reader.readAsText(file)
   }
 
-  return { cues, editingIndex, setEditingIndex, activeIndex, closeEdit, updateCue, addCue, deleteCue, clearCues, exportCues, importCues }
+  return { cues, editingIndex, setEditingIndex, closeEdit, updateCue, addClips, deleteCue, clearCues, exportCues, importCues }
 }

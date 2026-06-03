@@ -1,14 +1,25 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
-export function useSyncBroadcast(videoRef: React.RefObject<HTMLVideoElement | null>) {
+export function useSyncBroadcast(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  getVideoId: () => string | null,
+) {
+  const getVideoIdRef = useRef(getVideoId)
+  useEffect(() => {
+    getVideoIdRef.current = getVideoId
+  })
+
   useEffect(() => {
     const channel = new BroadcastChannel('video_sync')
     const vid = videoRef.current
     if (!vid) return
 
-    const onPlay = () => channel.postMessage({ type: 'play', currentTime: vid.currentTime })
-    const onPause = () => channel.postMessage({ type: 'pause', currentTime: vid.currentTime })
-    const onSeeked = () => channel.postMessage({ type: 'seek', currentTime: vid.currentTime })
+    const post = (type: 'play' | 'pause' | 'seek') =>
+      channel.postMessage({ type, videoId: getVideoIdRef.current(), currentTime: vid.currentTime })
+
+    const onPlay = () => post('play')
+    const onPause = () => post('pause')
+    const onSeeked = () => post('seek')
 
     vid.addEventListener('play', onPlay)
     vid.addEventListener('pause', onPause)
@@ -19,6 +30,7 @@ export function useSyncBroadcast(videoRef: React.RefObject<HTMLVideoElement | nu
         vid.muted = true
         channel.postMessage({
           type: 'send_initial_state',
+          videoId: getVideoIdRef.current(),
           currentTime: vid.currentTime,
           isPlaying: !vid.paused,
         })
