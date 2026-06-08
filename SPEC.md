@@ -15,6 +15,8 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 3. As a tester, I want to load short video clips by uploading them — one clip per cue — so that each segment starts and stops cleanly and I am not dependent on a specific machine or file path.
 4. As a tester, I want to open a sync monitor screen in a separate browser window that mirrors playback events from the main screen, so that I can show the video on the holobox without exposing the controls.
 5. As a controller running a live session, I want to lay the cues out as a connected graph that mirrors the scenario flow and see which cues come next after the one I just played, so that I can find the right key quickly without losing my place.
+6. As a user, I want to be welcomed by a video that I can interact with.
+7. As a tester, I want to be able to run the 3 states of the poking feature, idle/ poked/ touched_screen and see how they change in the separate monitor view. 
 
 ---
 
@@ -131,6 +133,7 @@ Video files — one clip per cue, persisted in IndexedDB keyed by cue id
 - Because each cue is its own clip, playback stops at the clip's end instead of running into other footage
 - The playing card lights up (persistent white outline) in both views; cues connected as its "next" steps get a dashed-amber "up next" highlight so the controller can find them quickly
 - Key presses are ignored while a text input has focus
+- A video with a title *"idle"* runs an **InteractiveOverlay** function that enables for the user to interact with the character displayed on the monitor as the videos automatically play and go back to idle after 3 sec. 
 
 ### Sync screen
 - Opened as a separate browser window (e.g. via an "Open monitor" button)
@@ -145,6 +148,16 @@ Video files — one clip per cue, persisted in IndexedDB keyed by cue id
 - Each uploaded clip is saved to IndexedDB under its cue id and restored on the next visit; the monitor window reads clips from the same store on sync
 
 ---
+
+## Poking function Module
+
+### Overview
+
+The poking function model can be started by putting the **title** of any video to `idle`. On top a transparent overlay will be displayed that will differentiate between where the user can poke the character and where they will touch the backgorund/ screen. Based on where the user touches the screen, a correpsonding video will play automatically and will dissapear in 3 seconds, coming back to the *idle* state. 
+
+## Function logic 
+
+The whole function is communicating through the files `poked_game.jsx`, `index.tsx`, `monitor.tsx` and `CueCardFace.tsx`. The overlay is established in `poked_game.jsx` and is put over the video with the title `idle`. The idle title is checked from the `CueCardFace.tsx` and `monitor.tsx` is listening for the cue through a `useSyncBroadcast` and is passed from the controller-  `index.tsx`. At the end the monitor for the users, shows the overlay only when idle video is active. The overlay responds to user click/ touches and shows the corresponding video. 
 
 ## Out of scope
 

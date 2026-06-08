@@ -99,22 +99,41 @@ export default function Monitor() {
   const handlePokeClick = () => {
     const vid = videoRef.current;
     if (!vid || !pokedUrlRef.current) return;
+
     stateBeforeOverlayRef.current = {
       videoId: loadedIdRef.current,
       currentTime: vid.currentTime,
       play: !vid.paused,
     };
-    currentVideoTypeRef.current = "poked";
-    setVideoSrc(pokedUrlRef.current);
-    void vid.play();
+
+    vid.pause();
+    vid.src = pokedUrlRef.current;
+    vid.currentTime = 0;
+    vid.load();
+
+    const playHandler = () => {
+      vid.removeEventListener("canplay", playHandler);
+      void vid.play().catch((err) => console.log("Play error:", err));
+    };
+    vid.addEventListener("canplay", playHandler);
+
     setTimeout(() => {
       const state = stateBeforeOverlayRef.current;
       if (state) {
-        currentVideoTypeRef.current = "idle";
-        setVideoSrc(state.videoId ? urlCacheRef.current[state.videoId] : null);
-        vid.currentTime = state.currentTime;
-        if (state.play) void vid.play();
-        else vid.pause();
+        const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null;
+        if (idleUrl) {
+          vid.pause();
+          vid.src = idleUrl;
+          vid.currentTime = state.currentTime;
+          vid.load();
+          if (state.play) {
+            const playHandler2 = () => {
+              vid.removeEventListener("canplay", playHandler2);
+              void vid.play().catch((err) => console.log("Play error:", err));
+            };
+            vid.addEventListener("canplay", playHandler2);
+          }
+        }
       }
     }, 3000);
   };
@@ -122,22 +141,41 @@ export default function Monitor() {
   const handleBackgroundClick = () => {
     const vid = videoRef.current;
     if (!vid || !touchedScreenUrlRef.current) return;
+
     stateBeforeOverlayRef.current = {
       videoId: loadedIdRef.current,
       currentTime: vid.currentTime,
       play: !vid.paused,
     };
-    currentVideoTypeRef.current = "touched_screen";
-    setVideoSrc(touchedScreenUrlRef.current);
-    void vid.play();
+
+    vid.pause();
+    vid.src = touchedScreenUrlRef.current;
+    vid.currentTime = 0;
+    vid.load();
+
+    const playHandler = () => {
+      vid.removeEventListener("canplay", playHandler);
+      void vid.play().catch((err) => console.log("Play error:", err));
+    };
+    vid.addEventListener("canplay", playHandler);
+
     setTimeout(() => {
       const state = stateBeforeOverlayRef.current;
       if (state) {
-        currentVideoTypeRef.current = "idle";
-        setVideoSrc(state.videoId ? urlCacheRef.current[state.videoId] : null);
-        vid.currentTime = state.currentTime;
-        if (state.play) void vid.play();
-        else vid.pause();
+        const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null;
+        if (idleUrl) {
+          vid.pause();
+          vid.src = idleUrl;
+          vid.currentTime = state.currentTime;
+          vid.load();
+          if (state.play) {
+            const playHandler2 = () => {
+              vid.removeEventListener("canplay", playHandler2);
+              void vid.play().catch((err) => console.log("Play error:", err));
+            };
+            vid.addEventListener("canplay", playHandler2);
+          }
+        }
       }
     }, 3000);
   };
@@ -180,8 +218,8 @@ export default function Monitor() {
 
   // Load idle video when it becomes active
   useEffect(() => {
-    if (!isIdleVideoActive) return;
-  }, [isIdleVideoActive]);
+    if (!isIdleVideoActive) return
+  }, [isIdleVideoActive])
 
   return (
     <>
