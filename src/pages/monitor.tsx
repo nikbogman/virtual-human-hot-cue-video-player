@@ -17,8 +17,11 @@ export default function Monitor() {
   // Which clip is currently loaded, and a cache of blob URLs by clip id.
   const loadedIdRef = useRef<string | null>(null);
   const urlCacheRef = useRef<Record<string, string>>({});
-  const pokedUrlRef = useRef<string | null>(null);
-  const touchedScreenUrlRef = useRef<string | null>(null);
+  
+  // OPTIMIZATION: Assign the string paths directly instead of fetching/creating Blobs
+  const pokedUrlRef = useRef<string | null>("/poked.mp4");
+  const touchedScreenUrlRef = useRef<string | null>("/touched_screen.mp4");
+  
   const currentVideoTypeRef = useRef<"idle" | "poked" | "touched_screen">(
     "idle",
   );
@@ -152,41 +155,7 @@ export default function Monitor() {
     channelRef.current?.postMessage({ type: "request_initial_state" });
   }
 
-  // Load poked and touched_screen videos
-  useEffect(() => {
-    let cancelled = false;
-    const loadVideos = async () => {
-      // Load /poked.mp4
-      try {
-        const pokedFile = new File(
-          [await fetch("/poked.mp4").then((r) => r.blob())],
-          "poked.mp4",
-          { type: "video/mp4" },
-        );
-        const pokedUrl = URL.createObjectURL(pokedFile);
-        if (!cancelled) pokedUrlRef.current = pokedUrl;
-      } catch (e) {
-        console.log("Failed to load poked video");
-      }
-
-      // Load /touched_screen.mp4
-      try {
-        const touchedFile = new File(
-          [await fetch("/touched_screen.mp4").then((r) => r.blob())],
-          "touched_screen.mp4",
-          { type: "video/mp4" },
-        );
-        const touchedUrl = URL.createObjectURL(touchedFile);
-        if (!cancelled) touchedScreenUrlRef.current = touchedUrl;
-      } catch (e) {
-        console.log("Failed to load touched_screen video");
-      }
-    };
-    void loadVideos();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // NOTE: The previous async video loading useEffect block has been completely removed.
 
   // Load idle video when it becomes active
   useEffect(() => {
