@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { getVideo } from "../lib/videoDB";
-import InteractiveOverlay from "../components/poking_yoda/PokedGame";
+import InteractiveOverlay from "../components/PokingYoda/PokedGame";
 
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -17,11 +17,11 @@ export default function Monitor() {
   // Which clip is currently loaded, and a cache of blob URLs by clip id.
   const loadedIdRef = useRef<string | null>(null);
   const urlCacheRef = useRef<Record<string, string>>({});
-  
+
   // OPTIMIZATION: Assign the string paths directly instead of fetching/creating Blobs
   const pokedUrlRef = useRef<string | null>("/poked.mp4");
   const touchedScreenUrlRef = useRef<string | null>("/touched_screen.mp4");
-  
+
   const currentVideoTypeRef = useRef<"idle" | "poked" | "touched_screen">(
     "idle",
   );
@@ -31,7 +31,6 @@ export default function Monitor() {
     play: boolean;
   } | null>(null);
 
-  // --- REFACTORED INTERACTIVE OVERLAY HANDLERS ---
   const playVideoWhenReady = (video: HTMLVideoElement) => {
     const playHandler = () => {
       video.removeEventListener("canplay", playHandler);
@@ -154,8 +153,6 @@ export default function Monitor() {
     setSynced(true);
     channelRef.current?.postMessage({ type: "request_initial_state" });
   }
-
-  // NOTE: The previous async video loading useEffect block has been completely removed.
 
   // Load idle video when it becomes active
   useEffect(() => {

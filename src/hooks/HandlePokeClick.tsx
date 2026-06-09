@@ -7,8 +7,6 @@ interface VideoState {
   play: boolean;
 }
 
-// Dummy types for your existing refs context
-// (Keep or merge these with your component's actual definitions)
 interface VideoControllerProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   loadedIdRef: React.RefObject<string | null>;
@@ -18,7 +16,6 @@ interface VideoControllerProps {
   urlCacheRef: React.RefObject<Record<string, string>>;
 }
 
-// --- REFACTOR & CONVERSION ---
 export const useOverlayHandlers = ({
   videoRef,
   loadedIdRef,
