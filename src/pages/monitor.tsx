@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { getVideo } from "../lib/videoDB";
-import InteractiveOverlay from "../components/poking_yoda/poked_game";
+import InteractiveOverlay from "../components/poking_yoda/PokedGame";
 
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -27,6 +27,62 @@ export default function Monitor() {
     currentTime: number;
     play: boolean;
   } | null>(null);
+
+  // --- REFACTORED INTERACTIVE OVERLAY HANDLERS ---
+  const playVideoWhenReady = (video: HTMLVideoElement) => {
+    const playHandler = () => {
+      video.removeEventListener("canplay", playHandler);
+      video.play().catch((err) => console.error("Play error:", err));
+    };
+    video.addEventListener("canplay", playHandler);
+  };
+
+  const triggerOverlayVideo = (targetUrl: string | null) => {
+    const vid = videoRef.current;
+    if (!vid || !targetUrl) return;
+
+    // Save state before changing video source
+    stateBeforeOverlayRef.current = {
+      videoId: loadedIdRef.current,
+      currentTime: vid.currentTime,
+      play: !vid.paused,
+    };
+
+    vid.pause();
+    vid.src = targetUrl;
+    vid.currentTime = 0;
+    vid.load();
+    playVideoWhenReady(vid);
+
+    // Revert back to base video after 3 seconds
+    setTimeout(() => {
+      const state = stateBeforeOverlayRef.current;
+      if (!state) return;
+
+      const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null;
+      if (idleUrl) {
+        vid.pause();
+        vid.src = idleUrl;
+        vid.currentTime = state.currentTime;
+        vid.load();
+
+        if (state.play) {
+          playVideoWhenReady(vid);
+        }
+      }
+    }, 3000);
+  };
+
+  const handlePokeClick = () => {
+    currentVideoTypeRef.current = "poked";
+    triggerOverlayVideo(pokedUrlRef.current);
+  };
+
+  const handleBackgroundClick = () => {
+    currentVideoTypeRef.current = "touched_screen";
+    triggerOverlayVideo(touchedScreenUrlRef.current);
+  };
+  // -----------------------------------------------
 
   useEffect(() => {
     const channel = new BroadcastChannel("video_sync");
@@ -96,90 +152,6 @@ export default function Monitor() {
     channelRef.current?.postMessage({ type: "request_initial_state" });
   }
 
-  const handlePokeClick = () => {
-    const vid = videoRef.current;
-    if (!vid || !pokedUrlRef.current) return;
-
-    stateBeforeOverlayRef.current = {
-      videoId: loadedIdRef.current,
-      currentTime: vid.currentTime,
-      play: !vid.paused,
-    };
-
-    vid.pause();
-    vid.src = pokedUrlRef.current;
-    vid.currentTime = 0;
-    vid.load();
-
-    const playHandler = () => {
-      vid.removeEventListener("canplay", playHandler);
-      void vid.play().catch((err) => console.log("Play error:", err));
-    };
-    vid.addEventListener("canplay", playHandler);
-
-    setTimeout(() => {
-      const state = stateBeforeOverlayRef.current;
-      if (state) {
-        const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null;
-        if (idleUrl) {
-          vid.pause();
-          vid.src = idleUrl;
-          vid.currentTime = state.currentTime;
-          vid.load();
-          if (state.play) {
-            const playHandler2 = () => {
-              vid.removeEventListener("canplay", playHandler2);
-              void vid.play().catch((err) => console.log("Play error:", err));
-            };
-            vid.addEventListener("canplay", playHandler2);
-          }
-        }
-      }
-    }, 3000);
-  };
-
-  const handleBackgroundClick = () => {
-    const vid = videoRef.current;
-    if (!vid || !touchedScreenUrlRef.current) return;
-
-    stateBeforeOverlayRef.current = {
-      videoId: loadedIdRef.current,
-      currentTime: vid.currentTime,
-      play: !vid.paused,
-    };
-
-    vid.pause();
-    vid.src = touchedScreenUrlRef.current;
-    vid.currentTime = 0;
-    vid.load();
-
-    const playHandler = () => {
-      vid.removeEventListener("canplay", playHandler);
-      void vid.play().catch((err) => console.log("Play error:", err));
-    };
-    vid.addEventListener("canplay", playHandler);
-
-    setTimeout(() => {
-      const state = stateBeforeOverlayRef.current;
-      if (state) {
-        const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null;
-        if (idleUrl) {
-          vid.pause();
-          vid.src = idleUrl;
-          vid.currentTime = state.currentTime;
-          vid.load();
-          if (state.play) {
-            const playHandler2 = () => {
-              vid.removeEventListener("canplay", playHandler2);
-              void vid.play().catch((err) => console.log("Play error:", err));
-            };
-            vid.addEventListener("canplay", playHandler2);
-          }
-        }
-      }
-    }, 3000);
-  };
-
   // Load poked and touched_screen videos
   useEffect(() => {
     let cancelled = false;
@@ -218,8 +190,8 @@ export default function Monitor() {
 
   // Load idle video when it becomes active
   useEffect(() => {
-    if (!isIdleVideoActive) return
-  }, [isIdleVideoActive])
+    if (!isIdleVideoActive) return;
+  }, [isIdleVideoActive]);
 
   return (
     <>
