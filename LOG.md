@@ -1,4 +1,9 @@
 # Changelog
+
+## 2026-06-10
+
+Instead of "X" and "O" the tic tac toe game uses green and red lightsabers to make the turns (green for Yoda, red for the user). I made UI changes on the tic tac toe monitor, it now uses colours withing the Yoda palette, some paddings were changed a star wars themed font was included for global monitor use. 
+
 ## 2026-06-03 (Tic Tac Toe) (9)
 
 The controller can escape the game mode with a hot cue, named `start/ welcome/ home/ reset`. 

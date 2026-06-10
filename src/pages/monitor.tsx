@@ -138,7 +138,7 @@ export default function Monitor() {
       <Head>
         <title>Monitor — Hot Cue Player</title>
       </Head>
-      <div className="h-screen bg-black relative overflow-hidden">
+      <div className="monitor-font h-screen bg-black relative overflow-hidden">
         {mode === 'tic-tac-toe' ? (
           <TicTacToe
             key={gameSession}

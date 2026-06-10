@@ -7,6 +7,8 @@ const WIN_LINES = [
 ]
 
 const THINK_DELAY = 800
+const COMPUTER_MARK_SRC = '/lightsaberGreen.png'
+const HUMAN_MARK_SRC = '/lightsaberRed.png'
 
 function emptyBoard() {
   return Array<string>(9).fill('')
@@ -36,6 +38,12 @@ function endMessage(board: string[]) {
   const winner = getWinner(board)
   if (winner) return winner + ' wins!'
   if (board.every((cell) => cell)) return 'Draw!'
+  return null
+}
+
+function markVisual(mark: string) {
+  if (mark === 'X') return { src: COMPUTER_MARK_SRC, alt: 'Computer lightsaber' }
+  if (mark === 'O') return { src: HUMAN_MARK_SRC, alt: 'User lightsaber' }
   return null
 }
 
@@ -169,7 +177,14 @@ export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.
               className={`ttt-cell${mark ? ' ttt-cell--taken' : ''}`}
               onClick={() => onCellClick(i)}
             >
-              {mark}
+              {mark ? (
+                <img
+                  className="ttt-saber"
+                  src={markVisual(mark)?.src}
+                  alt={markVisual(mark)?.alt ?? ''}
+                  draggable={false}
+                />
+              ) : null}
             </button>
           ))}
         </div>
