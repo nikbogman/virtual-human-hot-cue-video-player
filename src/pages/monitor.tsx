@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import TicTacToe from '../components/TicTacToe'
 import { getVideo } from '../lib/videoDB'
@@ -16,15 +16,6 @@ export default function Monitor() {
   const syncedRef = useRef(false)
   const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(null)
   const modeRef = useRef<MonitorMode>('video')
-
-  const loadStoredVideo = useCallback(async () => {
-    const file = await getStoredVideo()
-    if (!file) return
-    setVideoSrc((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return URL.createObjectURL(file)
-    })
-  }, [])
 
   useEffect(() => {
     modeRef.current = mode
@@ -57,7 +48,9 @@ export default function Monitor() {
       const vid = videoRef.current
 
       if (data.type === 'show_tic_tac_toe') {
+        pendingRef.current = null
         localStorage.setItem('monitorMode', 'tic-tac-toe')
+        modeRef.current = 'tic-tac-toe'
         setMode('tic-tac-toe')
         setGameSession((prev) => prev + 1)
         setGameBackgroundCue((prev) => ({
@@ -65,16 +58,15 @@ export default function Monitor() {
           version: (prev?.version ?? 0) + 1,
         }))
         vid?.pause()
-        void loadStoredVideo()
         return
       }
 
       if (data.type === 'show_welcome') {
+        pendingRef.current = { currentTime: data.startTime, play: true }
         localStorage.setItem('monitorMode', 'video')
-        pendingRef.current = { currentTime: data.startTime, isPlaying: true }
+        modeRef.current = 'video'
         setGameBackgroundCue(null)
         setMode('video')
-        void loadStoredVideo()
         if (vid?.readyState && vid.readyState >= 1) applyPending(vid)
         return
       }
@@ -108,6 +100,7 @@ export default function Monitor() {
       const wasLoaded = loadedIdRef.current === data.videoId
       void ensureClip(data.videoId).then(() => {
         const v = videoRef.current
+        if (modeRef.current === 'tic-tac-toe') return
         // If the clip was already loaded, apply now; otherwise onLoadedMetadata will.
         if (v && wasLoaded && v.readyState >= 1) applyPending(v)
       })
@@ -131,13 +124,13 @@ export default function Monitor() {
   function handleSync() {
     syncedRef.current = true
     setSynced(true)
-    await loadStoredVideo()
     if (localStorage.getItem('monitorMode') === 'tic-tac-toe') {
+      modeRef.current = 'tic-tac-toe'
       setMode('tic-tac-toe')
       setGameSession((prev) => prev + 1)
-      return
+    } else {
+      channelRef.current?.postMessage({ type: 'request_initial_state' })
     }
-    channelRef.current?.postMessage({ type: 'request_initial_state' })
   }
 
   return (

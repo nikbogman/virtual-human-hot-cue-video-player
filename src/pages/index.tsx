@@ -9,7 +9,7 @@ import { useSyncBroadcast } from '../hooks/useSyncBroadcast'
 import { getVideo } from '../lib/videoDB'
 import { cueCardBase, cueHighlightClass } from '../lib/cueStyle'
 import type { HotCue } from '../types'
-import { Monitor, Upload, Download, Plus, Trash2, List, Network, Home, X} from 'lucide-react'
+import { Monitor, Upload, Download, Plus, Trash2, List, Network } from 'lucide-react'
 
 // React Flow measures the DOM, so the canvas is client-only (Pages Router).
 const CueGraph = dynamic(() => import('../components/CueGraph'), { ssr: false })
@@ -20,11 +20,11 @@ const btnCls =
   'hover:bg-[#2e2e2e] hover:border-[#555] hover:text-white'
 
 function startsTicTacToe(cue: HotCue) {
-  return /tic[-\s]?tac[-\s]?toe/i.test(cue.label)
+  return /tic[-\s]?tac[-\s]?toe/i.test(cue.title)
 }
 
 function returnsToWelcome(cue: HotCue) {
-  return /\b(welcome|start|home|reset)\b/i.test(cue.label)
+  return /\b(welcome|start|home|reset)\b/i.test(cue.title)
 }
 
 export default function HotCuePlayer() {
@@ -50,8 +50,7 @@ export default function HotCuePlayer() {
   const [playingId, setPlayingId] = useState<string | null>(null)
 
   const [isDragOver, setIsDragOver] = useState(false)
-
-  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } = useSyncBroadcast(videoRef)
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } = useSyncBroadcast(videoRef, () => activeIdRef.current)
 
   // Cue waiting to be seeked + played once its clip has loaded.
   const pendingCueRef = useRef<HotCue | null>(null)
@@ -107,8 +106,6 @@ export default function HotCuePlayer() {
   useEffect(() => {
     activeIdRef.current = activeId
   })
-
-  const { openMonitor } = useSyncBroadcast(videoRef, () => activeIdRef.current)
 
   // Load a blob URL for every cue's clip; revoke URLs for removed cues.
   useEffect(() => {
