@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import TicTacToe from '../components/TicTacToe'
-import { getStoredVideo } from '../lib/videoDB'
+import { getVideo } from '../lib/videoDB'
 
 type MonitorMode = 'video' | 'tic-tac-toe'
 
@@ -14,7 +14,7 @@ export default function Monitor() {
   const [gameSession, setGameSession] = useState(0)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
-  const pendingRef = useRef<{ currentTime: number; isPlaying: boolean } | null>(null)
+  const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(null)
   const modeRef = useRef<MonitorMode>('video')
 
   const loadStoredVideo = useCallback(async () => {
@@ -30,9 +30,28 @@ export default function Monitor() {
     modeRef.current = mode
   }, [mode])
 
+  // Which clip is currently loaded, and a cache of blob URLs by clip id.
+  const loadedIdRef = useRef<string | null>(null)
+  const urlCacheRef = useRef<Record<string, string>>({})
+
   useEffect(() => {
     const channel = new BroadcastChannel('video_sync')
     channelRef.current = channel
+    const urlCache = urlCacheRef.current
+
+    // Load the requested clip into the player (no-op if already loaded).
+    async function ensureClip(id: string | null) {
+      if (!id || loadedIdRef.current === id) return
+      let url = urlCache[id]
+      if (!url) {
+        const file = await getVideo(id)
+        if (!file) return
+        url = URL.createObjectURL(file)
+        urlCache[id] = url
+      }
+      loadedIdRef.current = id
+      setVideoSrc(url)
+    }
 
     channel.addEventListener('message', ({ data }) => {
       const vid = videoRef.current
@@ -71,39 +90,45 @@ export default function Monitor() {
 
       if (!vid) return
 
+      let play: boolean
       if (data.type === 'send_initial_state') {
         if (!syncedRef.current) return
-        pendingRef.current = { currentTime: data.currentTime, isPlaying: data.isPlaying }
-        if (vid.readyState >= 1) applyPending(vid)
+        play = data.isPlaying
       } else if (data.type === 'play') {
-        vid.currentTime = data.currentTime
-        void vid.play()
+        play = true
       } else if (data.type === 'pause') {
-        vid.currentTime = data.currentTime
-        vid.pause()
+        play = false
       } else if (data.type === 'seek') {
-        vid.currentTime = data.currentTime
+        play = !vid.paused // a seek alone shouldn't change play/pause state
+      } else {
+        return
       }
+
+      pendingRef.current = { currentTime: data.currentTime, play }
+      const wasLoaded = loadedIdRef.current === data.videoId
+      void ensureClip(data.videoId).then(() => {
+        const v = videoRef.current
+        // If the clip was already loaded, apply now; otherwise onLoadedMetadata will.
+        if (v && wasLoaded && v.readyState >= 1) applyPending(v)
+      })
     })
 
-    return () => channel.close()
-  }, [loadStoredVideo])
-
-  useEffect(() => {
     return () => {
-      if (videoSrc) URL.revokeObjectURL(videoSrc)
+      Object.values(urlCache).forEach((u) => URL.revokeObjectURL(u))
+      channel.close()
     }
-  }, [videoSrc])
+  }, [])
 
   function applyPending(vid: HTMLVideoElement) {
     const p = pendingRef.current
     if (!p) return
     vid.currentTime = p.currentTime
-    if (p.isPlaying) void vid.play()
+    if (p.play) void vid.play()
+    else vid.pause()
     pendingRef.current = null
   }
 
-  async function handleSync() {
+  function handleSync() {
     syncedRef.current = true
     setSynced(true)
     await loadStoredVideo()
