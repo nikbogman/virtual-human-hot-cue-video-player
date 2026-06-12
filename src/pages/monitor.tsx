@@ -8,19 +8,22 @@ export default function Monitor() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
   const [isIdleVideoActive, setIsIdleVideoActive] = useState(false);
+  
+  // Controls overlay visibility during reaction playtimes
+  const [showOverlay, setShowOverlay] = useState(true);
+
   const channelRef = useRef<BroadcastChannel | null>(null);
   const syncedRef = useRef(false);
   const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(
     null,
   );
 
-  // Which clip is currently loaded, and a cache of blob URLs by clip id.
   const loadedIdRef = useRef<string | null>(null);
   const urlCacheRef = useRef<Record<string, string>>({});
 
-  // OPTIMIZATION: Assign the string paths directly instead of fetching/creating Blobs
-  const pokedUrlRef = useRef<string | null>("/poked.mp4");
-  const touchedScreenUrlRef = useRef<string | null>("/touched_screen.mp4");
+  // Dynamic references resolved via title mapping instead of static paths
+  const pokedIdRef = useRef<string | null>(null);
+  const touchedScreenIdRef = useRef<string | null>(null);
 
   const currentVideoTypeRef = useRef<"idle" | "poked" | "touched_screen">(
     "idle",
@@ -50,13 +53,16 @@ export default function Monitor() {
       play: !vid.paused,
     };
 
+    // Hide the overlay immediately when a reaction clip starts running
+    setShowOverlay(false);
+
     vid.pause();
     vid.src = targetUrl;
     vid.currentTime = 0;
     vid.load();
     playVideoWhenReady(vid);
 
-    // Revert back to base video after 3 seconds
+    // Revert back to base video after 3 seconds (Left exactly as requested)
     setTimeout(() => {
       const state = stateBeforeOverlayRef.current;
       if (!state) return;
@@ -72,26 +78,38 @@ export default function Monitor() {
           playVideoWhenReady(vid);
         }
       }
+      
+      // Re-enable interactions and restore idle pointer state
+      setShowOverlay(true);
+      currentVideoTypeRef.current = "idle";
     }, 3000);
   };
 
   const handlePokeClick = () => {
     currentVideoTypeRef.current = "poked";
-    triggerOverlayVideo(pokedUrlRef.current);
+    const targetUrl = pokedIdRef.current ? urlCacheRef.current[pokedIdRef.current] : null;
+    triggerOverlayVideo(targetUrl);
   };
 
   const handleBackgroundClick = () => {
     currentVideoTypeRef.current = "touched_screen";
-    triggerOverlayVideo(touchedScreenUrlRef.current);
+    const targetUrl = touchedScreenIdRef.current ? urlCacheRef.current[touchedScreenIdRef.current] : null;
+    triggerOverlayVideo(targetUrl);
   };
-  // -----------------------------------------------
 
   useEffect(() => {
     const channel = new BroadcastChannel("video_sync");
     channelRef.current = channel;
     const urlCache = urlCacheRef.current;
 
-    // Load the requested clip into the player (no-op if already loaded).
+    // Background preloader: caches files into Object URLs without altering main state
+    async function preloadClip(id: string | null) {
+      if (!id || urlCache[id]) return;
+      const file = await getVideo(id);
+      if (!file) return;
+      urlCache[id] = URL.createObjectURL(file);
+    }
+
     async function ensureClip(id: string | null) {
       if (!id || loadedIdRef.current === id) return;
       let url = urlCache[id];
@@ -106,6 +124,17 @@ export default function Monitor() {
     }
 
     channel.addEventListener("message", ({ data }) => {
+      // Catch incoming clip titles map from controller
+      if (data.type === "titles_map") {
+        pokedIdRef.current = data.mapping.poked;
+        touchedScreenIdRef.current = data.mapping.touched_screen;
+        
+        // Silently fetch and cache them so there's zero latency on touch events
+        if (data.mapping.poked) void preloadClip(data.mapping.poked);
+        if (data.mapping.touched_screen) void preloadClip(data.mapping.touched_screen);
+        return;
+      }
+
       const vid = videoRef.current;
       if (!vid) return;
 
@@ -118,7 +147,7 @@ export default function Monitor() {
       } else if (data.type === "pause") {
         play = false;
       } else if (data.type === "seek") {
-        play = !vid.paused; // a seek alone shouldn't change play/pause state
+        play = !vid.paused;
       } else {
         return;
       }
@@ -128,7 +157,6 @@ export default function Monitor() {
       const wasLoaded = loadedIdRef.current === data.videoId;
       void ensureClip(data.videoId).then(() => {
         const v = videoRef.current;
-        // If the clip was already loaded, apply now; otherwise onLoadedMetadata will.
         if (v && wasLoaded && v.readyState >= 1) applyPending(v);
       });
     });
@@ -154,11 +182,6 @@ export default function Monitor() {
     channelRef.current?.postMessage({ type: "request_initial_state" });
   }
 
-  // Load idle video when it becomes active
-  useEffect(() => {
-    if (!isIdleVideoActive) return;
-  }, [isIdleVideoActive]);
-
   return (
     <>
       <Head>
@@ -179,7 +202,8 @@ export default function Monitor() {
             <span className="text-[#666] text-sm">Click to sync</span>
           </div>
         )}
-        {isIdleVideoActive && (
+        {/* Render overlay only when idle loop is active AND no reaction timeline is running */}
+        {isIdleVideoActive && showOverlay && (
           <InteractiveOverlay
             onPokeClick={handlePokeClick}
             onBackgroundClick={handleBackgroundClick}

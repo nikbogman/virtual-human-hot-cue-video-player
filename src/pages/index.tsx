@@ -131,6 +131,36 @@ export default function HotCuePlayer() {
     () => activeIdRef.current === getCueByTitle(cues, "idle")?.id,
   );
 
+  useEffect(() => {
+    const channel = new BroadcastChannel("video_sync");
+    
+    const sendTitlesMap = () => {
+      channel.postMessage({
+        type: "titles_map",
+        mapping: {
+          poked: cues.find((c) => c.title === "poked")?.id || null,
+          touched_screen: cues.find((c) => c.title === "touched_screen")?.id || null,
+        },
+      });
+    };
+
+    // Send map when cues finish loading or changing
+    sendTitlesMap();
+
+    // Re-send the map if the monitor refreshes and asks for initial state
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "request_initial_state") {
+        setTimeout(sendTitlesMap, 50);
+      }
+    };
+
+    channel.addEventListener("message", handleMessage);
+    return () => {
+      channel.removeEventListener("message", handleMessage);
+      channel.close();
+    };
+  }, [cues]);
+
   // Load a blob URL for every cue's clip; revoke URLs for removed cues.
   useEffect(() => {
     let cancelled = false;
