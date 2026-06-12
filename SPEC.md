@@ -15,6 +15,7 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 3. As a tester, I want to load short video clips by uploading them — one clip per cue — so that each segment starts and stops cleanly and I am not dependent on a specific machine or file path.
 4. As a tester, I want to open a sync monitor screen in a separate browser window that mirrors playback events from the main screen, so that I can show the video on the holobox without exposing the controls.
 5. As a controller running a live session, I want to lay the cues out as a connected graph that mirrors the scenario flow and see which cues come next after the one I just played, so that I can find the right key quickly without losing my place.
+6. As a tester, I want to switch the monitor between a welcome/video state and the tic-tac-toe game state, so that I can return to the beginning of the interaction after a game segment.
 
 ---
 
@@ -27,6 +28,8 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 - Cue views: cues can be shown as a horizontal list or as a connectable node graph; in the graph, directed "next cue" connections highlight likely follow-up cues when one plays
 - Video loading: local upload of one or more short clips; each clip is persisted to IndexedDB so it can be accessed by the monitor window without re-uploading
 - Sync screen: a separate browser window that mirrors playback state (play, pause, seek, segment trigger) via BroadcastChannel; no WebSocket or server required
+- Monitor mode switching: a tic-tac-toe cue switches the monitor to the game, while a welcome/start/home/reset cue or the Welcome button returns the monitor to the normal video state
+- Manual game background changes: while tic-tac-toe is active, non-mode hot cues manually jump the game background video to the cue timestamp
 
 ---
 
@@ -69,6 +72,7 @@ This is a rebuild of the [original version](https://holobox-video-controller-957
 - No hot cue bar, no controls visible
 - Reacts to BroadcastChannel messages from the main screen
 - On first open (or after refresh): shows a "Click to sync" overlay to allow the browser to start playback (required by autoplay policy)
+- Can display either the synced video/welcome state or the tic-tac-toe game state
 
 ---
 
@@ -131,6 +135,14 @@ Video files — one clip per cue, persisted in IndexedDB keyed by cue id
 - Because each cue is its own clip, playback stops at the clip's end instead of running into other footage
 - The playing card lights up (persistent white outline) in both views; cues connected as its "next" steps get a dashed-amber "up next" highlight so the controller can find them quickly
 - Key presses are ignored while a text input has focus
+- Labels containing `tic-tac-toe` or `tic tac toe` switch the monitor to a fresh tic-tac-toe game
+- Labels containing `welcome`, `start`, `home`, or `reset` return the monitor to video mode at that cue's start time
+- While the monitor is in tic-tac-toe mode, other hot cues manually change the game background video to that cue's start time
+
+### Monitor welcome control
+- The main screen includes a Tailwind-styled Welcome button in the controls bar
+- Clicking Welcome returns the monitor to the normal video state at `0:00`
+- This provides a quick reset without requiring a configured hot cue
 
 ### Sync screen
 - Opened as a separate browser window (e.g. via an "Open monitor" button)
@@ -138,11 +150,95 @@ Video files — one clip per cue, persisted in IndexedDB keyed by cue id
 - On load: shows a "Click to sync" overlay; clicking it dismisses the overlay and puts the video into a ready state so autoplay can proceed
 - Video renders without native player controls (`controls` attribute omitted)
 - When the monitor syncs, the main screen mutes its video automatically to prevent audio echo
+- `show_tic_tac_toe` persists game mode and remounts a fresh game session
+- `show_welcome` persists video mode and seeks the monitor video to the requested welcome timestamp
 
 ### Persistence
-- Hot cues are saved to `localStorage` (key `hotCues`) and restored on the next visit
-- The graph layout — node positions and "next cue" connections — is saved to `localStorage` (keys `cuePositions` and `cueLinks`)
-- Each uploaded clip is saved to IndexedDB under its cue id and restored on the next visit; the monitor window reads clips from the same store on sync
+- Hot cues are saved to `localStorage` and restored on the next visit
+- The loaded video file is saved to IndexedDB and restored on the next visit; the monitor window reads from the same store on sync
+
+### Tic-Tac-Toe Module
+
+#### Overview
+
+The Tic-Tac-Toe module can be triggered from the main video application using Hot Cues. When activated, the monitor window switches from normal video playback to a playable Tic-Tac-Toe game, allowing visitors to interact with the screen instead of passive VH interractions.
+
+The game is designed as part of the Holobox experience and can dynamically synchronize its background video with timestamps from the main video player.
+
+#### Features
+
+##### Interactive Gameplay
+* Player competes against a computer opponent.
+* Human player uses "O"/ according Star Wars "dark side" element.
+* Computer uses "X", according Star Wars "light side" element.
+* Computer performs a move after a short thinking delay.
+* Win, loss, and draw conditions are automatically detected.
+* Players can immediately start a new game after completion.
+
+##### Automatic Game Logic
+The game checks all possible winning combinations:
+
+* Horizontal rows
+* Vertical columns
+* Diagonal lines
+
+A match ends when:
+
+* Three identical symbols appear in a winning line.
+* The board becomes full without a winner (draw).
+* The controller behind the VH switches back to video mode.
+
+##### Dynamic Background Video
+The Tic-Tac-Toe screen contains a background video that can be controlled from the main application.
+
+When a Hot Cue is triggered while the game is active:
+
+* The game background video jumps to the selected timestamp.
+* Playback automatically continues from the chosen position.
+* This allows different game moments to be synchronized with the VH reaction states. 
+
+##### Monitor Integration
+The game is displayed inside the monitor window rather than the control interface.
+
+The monitor can switch between:
+
+1. Welcome Mode
+   * Standard video playback.
+
+2. Tic-Tac-Toe Mode
+   * Interactive game screen.
+   * Independent game state.
+   * Video background synchronized through Hot Cues.
+
+#### Gameplay Flow
+
+##### Start
+1. Game loads.
+2. Empty board is created.
+3. Computer begins the match.
+4. Computer places an **X** after a short delay.
+
+##### Player Turn
+1. User clicks an empty square.
+2. An **O** is placed.
+3. Game checks for victory or draw.
+
+##### Computer Turn
+1. Computer selects a random empty square.
+2. An **X** is placed.
+3. Game checks for victory or draw.
+
+##### End Game
+If a result is detected:
+
+* "X wins!"
+* "O wins!"
+* "Draw!"
+
+The player is presented with:
+
+* **Yes** → Start a new game.
+* **No** → Hide the board and return control to the controller behind the VH.
 
 ---
 

@@ -19,6 +19,14 @@ const btnCls =
   'text-[13px] whitespace-nowrap inline-flex items-center gap-1.5 leading-none h-8 ' +
   'hover:bg-[#2e2e2e] hover:border-[#555] hover:text-white'
 
+function startsTicTacToe(cue: HotCue) {
+  return /tic[-\s]?tac[-\s]?toe/i.test(cue.title)
+}
+
+function returnsToWelcome(cue: HotCue) {
+  return /\b(welcome|start|home|reset)\b/i.test(cue.title)
+}
+
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,6 +50,7 @@ export default function HotCuePlayer() {
   const [playingId, setPlayingId] = useState<string | null>(null)
 
   const [isDragOver, setIsDragOver] = useState(false)
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } = useSyncBroadcast(videoRef, () => activeIdRef.current)
 
   // Cue waiting to be seeked + played once its clip has loaded.
   const pendingCueRef = useRef<HotCue | null>(null)
@@ -52,6 +61,9 @@ export default function HotCuePlayer() {
     if (!vid || !cue) return
     vid.currentTime = cue.startTime
     void vid.play()
+    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime)
+    else if (returnsToWelcome(cue)) showWelcome(cue.startTime)
+    else setTicTacToeBackground(cue.startTime)
     pendingCueRef.current = null
   }
 
@@ -94,8 +106,6 @@ export default function HotCuePlayer() {
   useEffect(() => {
     activeIdRef.current = activeId
   })
-
-  const { openMonitor } = useSyncBroadcast(videoRef, () => activeIdRef.current)
 
   // Load a blob URL for every cue's clip; revoke URLs for removed cues.
   useEffect(() => {

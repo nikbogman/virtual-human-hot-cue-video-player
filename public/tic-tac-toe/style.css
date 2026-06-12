@@ -1,0 +1,90 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#bg {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+#grid {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  grid-template-rows: repeat(3, 100px);
+  gap: 4px;
+}
+
+#status {
+  position: fixed;
+  left: 50%;
+  top: calc(50% - 180px);
+  transform: translateX(-50%);
+  z-index: 1;
+  font-size: 1.5rem;
+  color: white;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  min-height: 1.5rem;
+}
+
+#choices {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  pointer-events: none;
+}
+
+#choices:not(.hidden) {
+  pointer-events: auto;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#choices button {
+  width: 200px;
+  height: 100px;
+  font-size: 2.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  border: 3px solid #333;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+#choices button:hover {
+  background: #eee;
+}
+
+.cell {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 3rem;
+  color: pink;
+}
+
+.cell:not(:empty) {
+  cursor: default;
+}

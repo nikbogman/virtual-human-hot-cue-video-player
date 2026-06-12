@@ -1,0 +1,100 @@
+.ttt-root {
+  box-sizing: border-box;
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.ttt-root *,
+.ttt-root *::before,
+.ttt-root *::after {
+  box-sizing: border-box;
+}
+
+.ttt-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.ttt-grid {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  grid-template-rows: repeat(3, 100px);
+  gap: 4px;
+}
+
+.ttt-status {
+  position: fixed;
+  left: 50%;
+  top: 20%;
+  transform: translateX(-50%);
+  z-index: 3;
+  font-size: 4rem;
+  color: rgb(255, 255, 255);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  min-height: 4rem;
+}
+
+.ttt-choices {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+}
+
+.ttt-choices--hidden {
+  display: none;
+}
+
+.ttt-choice-btn {
+  width: 200px;
+  height: 100px;
+  font-size: 2.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 12px;
+  color: rgba(97, 102, 64);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 20px rgba(6, 82, 11, 0.35);
+}
+
+.ttt-choice-btn:hover {
+  background: #9bb38cb6;
+}
+
+.ttt-cell {
+  width: 100px;
+  height: 100px;
+  background: rgba(97, 102, 64, 0.85);
+  border: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.ttt-cell--taken {
+  cursor: default;
+}
+
+.ttt-saber {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}

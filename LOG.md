@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-06-10
+
+Instead of "X" and "O" the tic tac toe game uses green and red lightsabers to make the turns (green for Yoda, red for the user). I made UI changes on the tic tac toe monitor, it now uses colours withing the Yoda palette, some paddings were changed a star wars themed font was included for global monitor use. 
+
+## 2026-06-03 (Tic Tac Toe) (9)
+
+The controller can escape the game mode with a hot cue, named `start/ welcome/ home/ reset`. 
+
+## 2026-06-03 (Tic Tac Toe) (8)
+
+Bug fix: There was a hydration error. The issue was the saved hot cues: the server rendered with no localStorage, but the client’s first render immediately loaded saved cues, so the HTML didn’t match. Now, the first server/client render matches, then it loads saved cues right after hydration.
+
+## 2026-06-03 (Tic Tac Toe) (7)
+
+Tic tac toe game is triggered by a hot cue named `tic tac toe/ tic-tac-toe`. The game restarts every time the key with the game assigned id pressed. Other videos can play in the background. 
+
+## 2026-06-03 (Tic Tac Toe) (6)
+
+Tic tac toe moved into the Next.js app: `src/components/TicTacToe.tsx` + `src/styles/tic-tac-toe.css`. `/monitor` shows the game (background video, grid, computer X, Yes/No). Static prototype is still in `public/tic-tac-toe/`. Currently the commander uses a key named `tic-tac-toe/ tic tac toe ..` to trigger the game. No other videos can be triggered by hot cues while the game is running. 
+
+## 2026-06-03 (Tic Tac Toe) (5)
+
+After the end of the game, buttons with Yes / No appear. Yes starts a new game, no hides the grid. No explanation text added, since the VH will ask about directions and give instructions. 
+
+## 2026-06-03 (Tic Tac Toe) (4)
+
+X is the computer: places on a random empty square after each human (O) move. Starts the game with the first X. 800ms “thinking” delay before every computer move, including the opening one. 
+
+## 2026-06-03 (Tic Tac Toe) (3)
+
+Win detection: first player to get 3 in a row, column, or diagonal wins. Game stops and shows “X wins!” or “O wins!”.
+
+## 2026-06-03 (Tic Tac Toe) (2)
+
+Turns alternate between X and O on each click (X goes first).
+
+## 2026-06-03 (Tic Tac Toe)
+
+Added `public/tic-tac-toe/` with separate `index.html`, `style.css`, and `main.js` in a new branch `feat/tic-tac-toe-game`. Full-screen background video (`../background.mp4`), centred 3×3 grid, click an empty square to place an X. No turns, win detection, or O yet.
+
+====
+
 ## 2026-06-02 (3)
 
 Cue cards gained a separate **title** field alongside the existing **label**, and grew larger by
@@ -30,6 +72,8 @@ Reworked the app from one long video + timestamp cues into a **library of short 
 - Sync messages now carry `videoId`; `monitor.tsx` switches to the matching clip before mirroring play/pause/seek.
 
 Note: this changes the `hotCues` localStorage shape and the IndexedDB key scheme — cues and videos saved by the previous version won't carry over.
+
+====
 
 ## 2026-05-25 (2)
 

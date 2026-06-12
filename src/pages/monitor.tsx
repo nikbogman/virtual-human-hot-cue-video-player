@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
+import TicTacToe from '../components/TicTacToe'
 import { getVideo } from '../lib/videoDB'
+
+type MonitorMode = 'video' | 'tic-tac-toe'
 
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [synced, setSynced] = useState(false)
+  const [mode, setMode] = useState<MonitorMode>('video')
+  const [gameBackgroundCue, setGameBackgroundCue] = useState<{ startTime: number; version: number } | null>(null)
+  const [gameSession, setGameSession] = useState(0)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
   const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(null)
+  const modeRef = useRef<MonitorMode>('video')
+
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
 
   // Which clip is currently loaded, and a cache of blob URLs by clip id.
   const loadedIdRef = useRef<string | null>(null)
@@ -35,6 +46,40 @@ export default function Monitor() {
 
     channel.addEventListener('message', ({ data }) => {
       const vid = videoRef.current
+
+      if (data.type === 'show_tic_tac_toe') {
+        pendingRef.current = null
+        localStorage.setItem('monitorMode', 'tic-tac-toe')
+        modeRef.current = 'tic-tac-toe'
+        setMode('tic-tac-toe')
+        setGameSession((prev) => prev + 1)
+        setGameBackgroundCue((prev) => ({
+          startTime: data.startTime,
+          version: (prev?.version ?? 0) + 1,
+        }))
+        vid?.pause()
+        return
+      }
+
+      if (data.type === 'show_welcome') {
+        pendingRef.current = { currentTime: data.startTime, play: true }
+        localStorage.setItem('monitorMode', 'video')
+        modeRef.current = 'video'
+        setGameBackgroundCue(null)
+        setMode('video')
+        if (vid?.readyState && vid.readyState >= 1) applyPending(vid)
+        return
+      }
+
+      if (data.type === 'set_tic_tac_toe_background') {
+        if (modeRef.current !== 'tic-tac-toe') return
+        setGameBackgroundCue((prev) => ({
+          startTime: data.startTime,
+          version: (prev?.version ?? 0) + 1,
+        }))
+        return
+      }
+
       if (!vid) return
 
       let play: boolean
@@ -55,6 +100,7 @@ export default function Monitor() {
       const wasLoaded = loadedIdRef.current === data.videoId
       void ensureClip(data.videoId).then(() => {
         const v = videoRef.current
+        if (modeRef.current === 'tic-tac-toe') return
         // If the clip was already loaded, apply now; otherwise onLoadedMetadata will.
         if (v && wasLoaded && v.readyState >= 1) applyPending(v)
       })
@@ -78,7 +124,13 @@ export default function Monitor() {
   function handleSync() {
     syncedRef.current = true
     setSynced(true)
-    channelRef.current?.postMessage({ type: 'request_initial_state' })
+    if (localStorage.getItem('monitorMode') === 'tic-tac-toe') {
+      modeRef.current = 'tic-tac-toe'
+      setMode('tic-tac-toe')
+      setGameSession((prev) => prev + 1)
+    } else {
+      channelRef.current?.postMessage({ type: 'request_initial_state' })
+    }
   }
 
   return (
@@ -86,13 +138,21 @@ export default function Monitor() {
       <Head>
         <title>Monitor — Hot Cue Player</title>
       </Head>
-      <div className="h-screen bg-black relative overflow-hidden">
-        <video
-          ref={videoRef}
-          src={videoSrc ?? undefined}
-          className="w-full h-full object-contain"
-          onLoadedMetadata={() => applyPending(videoRef.current!)}
-        />
+      <div className="monitor-font h-screen bg-black relative overflow-hidden">
+        {mode === 'tic-tac-toe' ? (
+          <TicTacToe
+            key={gameSession}
+            backgroundCue={gameBackgroundCue}
+            backgroundSrc={videoSrc ?? undefined}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            src={videoSrc ?? undefined}
+            className="w-full h-full object-contain"
+            onLoadedMetadata={() => applyPending(videoRef.current!)}
+          />
+        )}
         {!synced && (
           <div
             className="absolute inset-0 flex items-center justify-center bg-black cursor-pointer"

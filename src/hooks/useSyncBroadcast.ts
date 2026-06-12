@@ -49,5 +49,25 @@ export function useSyncBroadcast(
     window.open('/monitor', '_blank', 'width=960,height=600')
   }
 
-  return { openMonitor }
+  function showTicTacToe(startTime: number) {
+    localStorage.setItem('monitorMode', 'tic-tac-toe')
+    const channel = new BroadcastChannel('video_sync')
+    channel.postMessage({ type: 'show_tic_tac_toe', startTime })
+    channel.close()
+  }
+
+  function showWelcome(startTime: number) {
+    localStorage.setItem('monitorMode', 'video')
+    const channel = new BroadcastChannel('video_sync')
+    channel.postMessage({ type: 'show_welcome', startTime })
+    channel.close()
+  }
+
+  function setTicTacToeBackground(startTime: number) {
+    const channel = new BroadcastChannel('video_sync')
+    channel.postMessage({ type: 'set_tic_tac_toe_background', startTime })
+    channel.close()
+  }
+
+  return { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground }
 }
