@@ -61,9 +61,9 @@ export default function HotCuePlayer() {
     if (!vid || !cue) return
     vid.currentTime = cue.startTime
     void vid.play()
-    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime)
-    else if (returnsToWelcome(cue)) showWelcome(cue.startTime)
-    else setTicTacToeBackground(cue.startTime)
+    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime, cue.id)
+    else if (returnsToWelcome(cue)) showWelcome(cue.startTime, cue.id)
+    else setTicTacToeBackground(cue.startTime, cue.id)
     pendingCueRef.current = null
   }
 

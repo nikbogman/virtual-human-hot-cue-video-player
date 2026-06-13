@@ -49,23 +49,23 @@ export function useSyncBroadcast(
     window.open('/monitor', '_blank', 'width=960,height=600')
   }
 
-  function showTicTacToe(startTime: number) {
+  function showTicTacToe(startTime: number, videoId: string | null = getVideoIdRef.current()) {
     localStorage.setItem('monitorMode', 'tic-tac-toe')
     const channel = new BroadcastChannel('video_sync')
-    channel.postMessage({ type: 'show_tic_tac_toe', startTime })
+    channel.postMessage({ type: 'show_tic_tac_toe', videoId, startTime })
     channel.close()
   }
 
-  function showWelcome(startTime: number) {
+  function showWelcome(startTime: number, videoId: string | null = getVideoIdRef.current()) {
     localStorage.setItem('monitorMode', 'video')
     const channel = new BroadcastChannel('video_sync')
-    channel.postMessage({ type: 'show_welcome', startTime })
+    channel.postMessage({ type: 'show_welcome', videoId, startTime })
     channel.close()
   }
 
-  function setTicTacToeBackground(startTime: number) {
+  function setTicTacToeBackground(startTime: number, videoId: string | null = getVideoIdRef.current()) {
     const channel = new BroadcastChannel('video_sync')
-    channel.postMessage({ type: 'set_tic_tac_toe_background', startTime })
+    channel.postMessage({ type: 'set_tic_tac_toe_background', videoId, startTime })
     channel.close()
   }
 

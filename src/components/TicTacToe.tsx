@@ -6,18 +6,13 @@ const WIN_LINES = [
   [0, 4, 8], [2, 4, 6],
 ]
 
-const THINK_DELAY = 800
+const THINK_DELAY = 7000
+const OPENING_THINK_DELAY = 13000
 const COMPUTER_MARK_SRC = '/lightsaberGreen.png'
 const HUMAN_MARK_SRC = '/lightsaberRed.png'
 
 function emptyBoard() {
   return Array<string>(9).fill('')
-}
-
-function boardWithComputerOpening() {
-  const board = emptyBoard()
-  board[Math.floor(Math.random() * board.length)] = 'X'
-  return board
 }
 
 function getWinner(board: string[]) {
@@ -47,9 +42,9 @@ function markVisual(mark: string) {
   return null
 }
 
-export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.mp4' }: Props) {
-  const [board, setBoard] = useState(boardWithComputerOpening)
-  const [humanTurn, setHumanTurn] = useState(true)
+export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
+  const [board, setBoard] = useState(emptyBoard)
+  const [humanTurn, setHumanTurn] = useState(false)
   const [status, setStatus] = useState('')
   const [showChoices, setShowChoices] = useState(false)
   const [showGrid, setShowGrid] = useState(true)
@@ -69,8 +64,7 @@ export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.
     setHumanTurn(false)
   }, [])
 
-  const runComputerTurn = useCallback(() => {
-    setHumanTurn(false)
+  const runComputerTurn = useCallback((delay = THINK_DELAY) => {
     clearTimeout(thinkTimerRef.current)
     thinkTimerRef.current = window.setTimeout(() => {
       if (gameOverRef.current) return
@@ -92,7 +86,7 @@ export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.
         setHumanTurn(true)
         setStatus('')
       }
-    }, THINK_DELAY)
+    }, delay)
   }, [finishGame])
 
   const startNewGame = useCallback(() => {
@@ -104,10 +98,13 @@ export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.
     setBoard(fresh)
     setStatus('')
     setHumanTurn(false)
-    runComputerTurn()
+    runComputerTurn(OPENING_THINK_DELAY)
   }, [runComputerTurn])
 
-  useEffect(() => () => clearTimeout(thinkTimerRef.current), [])
+  useEffect(() => {
+    runComputerTurn(OPENING_THINK_DELAY)
+    return () => clearTimeout(thinkTimerRef.current)
+  }, [runComputerTurn])
 
   useEffect(() => {
     const vid = backgroundRef.current
@@ -129,6 +126,7 @@ export default function TicTacToe({ backgroundCue, backgroundSrc = '/background.
       finishGame(msg)
       return
     }
+    setHumanTurn(false)
     runComputerTurn()
   }
 

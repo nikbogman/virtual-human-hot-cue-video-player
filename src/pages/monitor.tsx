@@ -32,16 +32,24 @@ export default function Monitor() {
 
     // Load the requested clip into the player (no-op if already loaded).
     async function ensureClip(id: string | null) {
-      if (!id || loadedIdRef.current === id) return
+      if (!id || loadedIdRef.current === id) return true
       let url = urlCache[id]
       if (!url) {
         const file = await getVideo(id)
-        if (!file) return
+        if (!file) return false
         url = URL.createObjectURL(file)
         urlCache[id] = url
       }
       loadedIdRef.current = id
       setVideoSrc(url)
+      return true
+    }
+
+    function setGameBackground(startTime: number) {
+      setGameBackgroundCue((prev) => ({
+        startTime,
+        version: (prev?.version ?? 0) + 1,
+      }))
     }
 
     channel.addEventListener('message', ({ data }) => {
@@ -53,10 +61,9 @@ export default function Monitor() {
         modeRef.current = 'tic-tac-toe'
         setMode('tic-tac-toe')
         setGameSession((prev) => prev + 1)
-        setGameBackgroundCue((prev) => ({
-          startTime: data.startTime,
-          version: (prev?.version ?? 0) + 1,
-        }))
+        void ensureClip(data.videoId).then((loaded) => {
+          if (loaded) setGameBackground(data.startTime)
+        })
         vid?.pause()
         return
       }
@@ -67,16 +74,19 @@ export default function Monitor() {
         modeRef.current = 'video'
         setGameBackgroundCue(null)
         setMode('video')
-        if (vid?.readyState && vid.readyState >= 1) applyPending(vid)
+        const wasLoaded = loadedIdRef.current === data.videoId
+        void ensureClip(data.videoId).then(() => {
+          const v = videoRef.current
+          if (v && wasLoaded && v.readyState >= 1) applyPending(v)
+        })
         return
       }
 
       if (data.type === 'set_tic_tac_toe_background') {
         if (modeRef.current !== 'tic-tac-toe') return
-        setGameBackgroundCue((prev) => ({
-          startTime: data.startTime,
-          version: (prev?.version ?? 0) + 1,
-        }))
+        void ensureClip(data.videoId).then((loaded) => {
+          if (loaded) setGameBackground(data.startTime)
+        })
         return
       }
 
