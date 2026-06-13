@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-13
+
+Updated the Tic Tc Toe UI by lowering the playing field based on Yoda position. Adjusted think delays to match the "using the forse" video length, included initial think delay for VH opening line and first "using the forse" videos. Fixed the static background issue - the game again uses a bg video based on the hot cue use. 
+
 ## 2026-06-10
 
 Instead of "X" and "O" the tic tac toe game uses green and red lightsabers to make the turns (green for Yoda, red for the user). I made UI changes on the tic tac toe monitor, it now uses colours withing the Yoda palette, some paddings were changed a star wars themed font was included for global monitor use. 
