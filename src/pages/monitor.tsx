@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import { getVideo } from '../lib/videoDB'
+// to test it only says detected:rock or paper or scissors
+// import GestureTest from '../components/RockPaperScissors/GestureTest' 
+
+import RockPaperScissors from '../components/RockPaperScissors/RockPaperScissors'
 
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -87,6 +91,9 @@ export default function Monitor() {
         <title>Monitor — Hot Cue Player</title>
       </Head>
       <div className="h-screen bg-black relative overflow-hidden">
+        {/* test page */}
+         {/* <GestureTest />  */}
+         <RockPaperScissors />  
         <video
           ref={videoRef}
           src={videoSrc ?? undefined}
