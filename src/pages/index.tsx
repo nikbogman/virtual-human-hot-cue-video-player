@@ -33,6 +33,14 @@ function getCueByTitle(cues: HotCue[], title: string): HotCue | undefined {
   return cues.find((c) => c.title === title);
 }
 
+function startsTicTacToe(cue: HotCue) {
+  return /tic[-\s]?tac[-\s]?toe/i.test(cue.title);
+}
+
+function returnsToWelcome(cue: HotCue) {
+  return /\b(welcome|start|home|reset)\b/i.test(cue.title);
+}
+
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,30 +62,10 @@ export default function HotCuePlayer() {
   // The cue that was last triggered — used to light up the playing card and to
   // surface its connected "next" cues. Stays set until another cue is pressed.
   const [playingId, setPlayingId] = useState<string | null>(null);
-
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Cue waiting to be seeked + played once its clip has loaded.
   const pendingCueRef = useRef<HotCue | null>(null);
-
-  function applyPendingCue() {
-    const vid = videoRef.current;
-    const cue = pendingCueRef.current;
-    if (!vid || !cue) return;
-    vid.currentTime = cue.startTime;
-    void vid.play();
-    pendingCueRef.current = null;
-  }
-
-  function handleCuePress(cue: HotCue) {
-    setPlayingId(cue.id);
-    pendingCueRef.current = cue;
-    if (activeIdRef.current === cue.id) {
-      applyPendingCue(); // clip already loaded — seek + play now
-    } else {
-      setSelectedId(cue.id); // switch clips; onLoadedMetadata will apply
-    }
-  }
 
   const {
     cues,
@@ -93,6 +81,46 @@ export default function HotCuePlayer() {
   } = useHotCues(handleCuePress);
 
   const graph = useCueGraph();
+
+  // Effective active clip: the explicitly selected one if it still exists, else
+  // the first cue so the player shows a frame instead of black. Derived, not effect-synced.
+  const activeId =
+    selectedId && cues.some((c) => c.id === selectedId)
+      ? selectedId
+      : (cues[0]?.id ?? null);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  });
+
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } =
+    useSyncBroadcast(
+      videoRef,
+      () => activeIdRef.current,
+      () => activeIdRef.current === getCueByTitle(cues, "idle")?.id,
+    );
+
+  function applyPendingCue() {
+    const vid = videoRef.current;
+    const cue = pendingCueRef.current;
+    if (!vid || !cue) return;
+    vid.currentTime = cue.startTime;
+    void vid.play();
+    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime, cue.id);
+    else if (returnsToWelcome(cue)) showWelcome(cue.startTime, cue.id);
+    else setTicTacToeBackground(cue.startTime, cue.id);
+    pendingCueRef.current = null;
+  }
+
+  function handleCuePress(cue: HotCue) {
+    setPlayingId(cue.id);
+    pendingCueRef.current = cue;
+    if (activeIdRef.current === cue.id) {
+      applyPendingCue(); // clip already loaded — seek + play now
+    } else {
+      setSelectedId(cue.id); // switch clips; onLoadedMetadata will apply
+    }
+  }
 
   // Delete / clear must also prune the graph layout (positions + links).
   function handleDeleteCue(i: number) {
@@ -115,39 +143,22 @@ export default function HotCuePlayer() {
     [graph.links, playingId],
   );
 
-  // Effective active clip: the explicitly selected one if it still exists, else
-  // the first cue so the player shows a frame instead of black. Derived, not effect-synced.
-  const activeId =
-    selectedId && cues.some((c) => c.id === selectedId)
-      ? selectedId
-      : (cues[0]?.id ?? null);
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  });
-
-  const { openMonitor } = useSyncBroadcast(
-    videoRef,
-    () => activeIdRef.current,
-    () => activeIdRef.current === getCueByTitle(cues, "idle")?.id,
-  );
-
   useEffect(() => {
     const channel = new BroadcastChannel("video_sync");
-    
+
     const sendTitlesMap = () => {
       channel.postMessage({
         type: "titles_map",
         mapping: {
           poked: cues.find((c) => c.title === "poked")?.id || null,
-          touched_screen: cues.find((c) => c.title === "touched_screen")?.id || null,
+          touched_screen:
+            cues.find((c) => c.title === "touched_screen")?.id || null,
         },
       });
     };
 
-    // Send map when cues finish loading or changing
     sendTitlesMap();
 
-    // Re-send the map if the monitor refreshes and asks for initial state
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === "request_initial_state") {
         setTimeout(sendTitlesMap, 50);
@@ -189,9 +200,6 @@ export default function HotCuePlayer() {
       cancelled = true;
     };
   }, [cues]);
-
-  // Derive interactive video URL from cue with title "idle"
-  const idleVideoUrl = urls[getCueByTitle(cues, "idle")?.id ?? ""] ?? null;
 
   // Revoke all blob URLs on unmount.
   useEffect(

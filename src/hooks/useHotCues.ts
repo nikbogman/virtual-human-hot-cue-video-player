@@ -11,20 +11,35 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
   const cuesRef = useRef(cues)
-  cuesRef.current = cues
   const editingIndexRef = useRef(editingIndex)
-  editingIndexRef.current = editingIndex
   const onCuePressRef = useRef(onCuePress)
-  onCuePressRef.current = onCuePress
+  const cuesLoadedRef = useRef(false)
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
-      if (Array.isArray(saved)) setCues(saved)
-    } catch {}
+    cuesRef.current = cues
+  }, [cues])
+
+  useEffect(() => {
+    editingIndexRef.current = editingIndex
+  }, [editingIndex])
+
+  useEffect(() => {
+    onCuePressRef.current = onCuePress
+  }, [onCuePress])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
+        if (Array.isArray(saved)) setCues(saved)
+      } catch {}
+      cuesLoadedRef.current = true
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [])
 
   useEffect(() => {
+    if (!cuesLoadedRef.current) return
     localStorage.setItem('hotCues', JSON.stringify(cues))
   }, [cues])
 
