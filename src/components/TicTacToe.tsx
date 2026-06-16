@@ -138,7 +138,6 @@ export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
         src={backgroundSrc}
         autoPlay
         muted
-        loop
         playsInline
         onLoadedMetadata={() => {
           if (!backgroundCue || !backgroundRef.current) return
