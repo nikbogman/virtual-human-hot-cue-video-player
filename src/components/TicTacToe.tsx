@@ -10,6 +10,11 @@ const THINK_DELAY = 7000
 const OPENING_THINK_DELAY = 13000
 const COMPUTER_MARK_SRC = '/lightsaberGreen.png'
 const HUMAN_MARK_SRC = '/lightsaberRed.png'
+const CHOICE_BUTTON_CLASS =
+  'h-[100px] w-[200px] cursor-pointer rounded-xl bg-white/[0.98] text-[2.5rem] font-bold text-[#616640] ' +
+  'shadow-[0_4px_20px_rgba(6,82,11,0.35)] hover:bg-[#9bb38cb6]'
+const CELL_CLASS =
+  'grid h-[100px] w-[100px] cursor-pointer place-items-center border-0 bg-[rgba(169,171,156,0.5)] p-0'
 
 function emptyBoard() {
   return Array<string>(9).fill('')
@@ -31,7 +36,8 @@ interface Props {
 
 function endMessage(board: string[]) {
   const winner = getWinner(board)
-  if (winner) return winner + ' wins!'
+  if (winner === 'O') return 'You win!'
+  if (winner === 'X') return 'Yoda wins!'
   if (board.every((cell) => cell)) return 'Draw!'
   return null
 }
@@ -131,10 +137,10 @@ export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
   }
 
   return (
-    <div className="ttt-root">
+    <div className="relative min-h-screen overflow-hidden">
       <video
         ref={backgroundRef}
-        className="ttt-bg"
+        className="fixed inset-0 z-0 h-full w-full"
         src={backgroundSrc}
         autoPlay
         muted
@@ -146,15 +152,19 @@ export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
         }}
       />
 
-      <p className="ttt-status">{status}</p>
+      <p className="fixed left-1/2 top-[10%] z-[3] min-h-16 -translate-x-1/2 text-6xl text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)]">
+        {status}
+      </p>
 
-      <div className={`ttt-choices${showChoices ? '' : ' ttt-choices--hidden'}`}>
-        <button type="button" className="ttt-choice-btn" onClick={startNewGame}>
+      <div
+        className={`${showChoices ? 'flex' : 'hidden'} fixed inset-x-0 bottom-0 top-[-40%] z-10 items-center justify-center gap-8`}
+      >
+        <button type="button" className={CHOICE_BUTTON_CLASS} onClick={startNewGame}>
           Yes
         </button>
         <button
           type="button"
-          className="ttt-choice-btn"
+          className={CHOICE_BUTTON_CLASS}
           onClick={() => {
             setShowChoices(false)
             setShowGrid(false)
@@ -166,17 +176,17 @@ export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
       </div>
 
       {showGrid && (
-        <div className="ttt-grid">
+        <div className="fixed left-1/2 top-[80%] z-[1] grid -translate-x-1/2 -translate-y-1/2 grid-cols-[repeat(3,100px)] grid-rows-[repeat(3,100px)] gap-1">
           {board.map((mark, i) => (
             <button
               key={i}
               type="button"
-              className={`ttt-cell${mark ? ' ttt-cell--taken' : ''}`}
+              className={`${CELL_CLASS}${mark ? ' cursor-default' : ''}`}
               onClick={() => onCellClick(i)}
             >
               {mark ? (
                 <img
-                  className="ttt-saber"
+                  className="h-[84px] w-[84px] select-none object-contain pointer-events-none"
                   src={markVisual(mark)?.src}
                   alt={markVisual(mark)?.alt ?? ''}
                   draggable={false}
