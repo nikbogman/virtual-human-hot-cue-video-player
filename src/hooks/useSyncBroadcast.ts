@@ -3,10 +3,15 @@ import { useEffect, useRef } from 'react'
 export function useSyncBroadcast(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   getVideoId: () => string | null,
+  getIsIdle: () => boolean = () => false,
 ) {
   const getVideoIdRef = useRef(getVideoId)
+  const getIsIdleRef = useRef(getIsIdle)
   useEffect(() => {
     getVideoIdRef.current = getVideoId
+  })
+  useEffect(() => {
+    getIsIdleRef.current = getIsIdle
   })
 
   useEffect(() => {
@@ -15,7 +20,7 @@ export function useSyncBroadcast(
     if (!vid) return
 
     const post = (type: 'play' | 'pause' | 'seek') =>
-      channel.postMessage({ type, videoId: getVideoIdRef.current(), currentTime: vid.currentTime })
+      channel.postMessage({ type, videoId: getVideoIdRef.current(), currentTime: vid.currentTime, isIdle: getIsIdleRef.current() })
 
     const onPlay = () => post('play')
     const onPause = () => post('pause')
@@ -33,6 +38,7 @@ export function useSyncBroadcast(
           videoId: getVideoIdRef.current(),
           currentTime: vid.currentTime,
           isPlaying: !vid.paused,
+          isIdle: getIsIdleRef.current(),
         })
       }
     }
