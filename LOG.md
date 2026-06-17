@@ -13,7 +13,7 @@ Make an automatic connection between the background video and corresponding Tic 
 
 To trigger the TicTacToe game the name needs to be specifically TicTacToe. 
 Yes restarts the game.
-No triggers idle state. 
+No triggers exit game window and idle state video. 
 
 ## 2026-06-13
 
