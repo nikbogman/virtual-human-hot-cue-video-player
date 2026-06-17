@@ -104,8 +104,12 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     setEditingIndex(null)
   }
 
-  function exportCues() {
-    const blob = new Blob([JSON.stringify(cuesRef.current, null, 2)], { type: 'application/json' })
+  // `extra` (e.g. game bindings) is folded into the JSON so a saved setup
+  // restores its clip links too. Backward compatible: import still accepts a
+  // bare cue array produced by older exports.
+  function exportCues(extra?: Record<string, unknown>) {
+    const payload = extra ? { cues: cuesRef.current, ...extra } : cuesRef.current
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -114,11 +118,12 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     URL.revokeObjectURL(url)
   }
 
-  function importCues(file: File) {
+  function importCues(file: File, onExtra?: (data: Record<string, unknown>) => void) {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string)
+        const parsed = JSON.parse(e.target?.result as string)
+        const data = Array.isArray(parsed) ? parsed : parsed?.cues
         if (!Array.isArray(data)) return
         const valid: HotCue[] = data
           .filter(
@@ -132,6 +137,7 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
           .map((item) => ({ ...item, title: typeof item.title === 'string' ? item.title : '' }))
         setCues(valid)
         setEditingIndex(null)
+        if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') onExtra?.(parsed)
       } catch {}
     }
     reader.readAsText(file)

@@ -1,21 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import TicTacToe from '../components/TicTacToe'
 import InteractiveOverlay from '../components/PokingYoda/PokedGame'
 import { getVideo } from '../lib/videoDB'
 
 type MonitorMode = 'video' | 'tic-tac-toe'
-type CueMapEntry = { id: string; startTime: number }
+
+type GameClip = { src: string; startTime: number } | null
+export type GameClips = {
+  start: GameClip
+  place: GameClip
+  win: GameClip
+  lose: GameClip
+  draw: GameClip
+  idle: GameClip
+}
 
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [synced, setSynced] = useState(false)
   const [mode, setMode] = useState<MonitorMode>('video')
-  const [gameBackgroundCue, setGameBackgroundCue] = useState<{ startTime: number; version: number } | null>(null)
   const [gameSession, setGameSession] = useState(0)
   const [isIdleVideoActive, setIsIdleVideoActive] = useState(false)
   const [showOverlay, setShowOverlay] = useState(true)
+  const [gameClips, setGameClips] = useState<GameClips>({
+    start: null,
+    place: null,
+    win: null,
+    lose: null,
+    draw: null,
+    idle: null,
+  })
 
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
@@ -24,7 +40,6 @@ export default function Monitor() {
 
   const loadedIdRef = useRef<string | null>(null)
   const urlCacheRef = useRef<Record<string, string>>({})
-  const cueMapRef = useRef<Record<string, CueMapEntry | null>>({})
   const pokedIdRef = useRef<string | null>(null)
   const touchedScreenIdRef = useRef<string | null>(null)
   const stateBeforeOverlayRef = useRef<{ videoId: string | null; currentTime: number; play: boolean } | null>(null)
@@ -32,39 +47,6 @@ export default function Monitor() {
   useEffect(() => {
     modeRef.current = mode
   }, [mode])
-
-  const ensureClip = useCallback(async (id: string | null) => {
-    if (!id || loadedIdRef.current === id) return true
-    const urlCache = urlCacheRef.current
-    let url = urlCache[id]
-    if (!url) {
-      const file = await getVideo(id)
-      if (!file) return false
-      url = URL.createObjectURL(file)
-      urlCache[id] = url
-    }
-    loadedIdRef.current = id
-    setVideoSrc(url)
-    return true
-  }, [])
-
-  const setGameBackground = useCallback((startTime: number) => {
-    setGameBackgroundCue((prev) => ({
-      startTime,
-      version: (prev?.version ?? 0) + 1,
-    }))
-  }, [])
-
-const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | null) => {
-    const targetKey = (title === 'TicTacToe') ? 'TicTacToe' : title;
-    
-    const cue = cueMapRef.current[targetKey] ?? fallback ?? null
-    if (!cue) return false
-    void ensureClip(cue.id).then((loaded) => {
-      if (loaded) setGameBackground(cue.startTime)
-    })
-    return true
-  }, [ensureClip, setGameBackground])
 
   function applyPending(vid: HTMLVideoElement) {
     const p = pendingRef.current
@@ -139,23 +121,48 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
       urlCache[id] = URL.createObjectURL(file)
     }
 
-    function normalizeCueEntry(entry: CueMapEntry | string | null | undefined): CueMapEntry | null {
-      if (!entry) return null
-      if (typeof entry === 'string') return { id: entry, startTime: 0 }
-      return entry
+    async function ensureClip(id: string | null) {
+      if (!id || loadedIdRef.current === id) return true
+      let url = urlCache[id]
+      if (!url) {
+        const file = await getVideo(id)
+        if (!file) return false
+        url = URL.createObjectURL(file)
+        urlCache[id] = url
+      }
+      loadedIdRef.current = id
+      setVideoSrc(url)
+      return true
     }
 
     channel.addEventListener('message', ({ data }) => {
       if (data.type === 'titles_map') {
-        const mapping = data.mapping ?? {}
-        const nextMap: Record<string, CueMapEntry | null> = {}
-        Object.entries(mapping).forEach(([title, entry]) => {
-          nextMap[title] = normalizeCueEntry(entry as CueMapEntry | string | null)
-          if (nextMap[title]) void preloadClip(nextMap[title].id)
-        })
-        cueMapRef.current = nextMap
-        pokedIdRef.current = nextMap.poked?.id ?? null
-        touchedScreenIdRef.current = nextMap.touched_screen?.id ?? null
+        pokedIdRef.current = data.mapping.poked
+        touchedScreenIdRef.current = data.mapping.touched_screen
+        if (data.mapping.poked) void preloadClip(data.mapping.poked)
+        if (data.mapping.touched_screen) void preloadClip(data.mapping.touched_screen)
+        return
+      }
+
+      if (data.type === 'game_bindings') {
+        const m = data.mapping ?? {}
+        const resolve = async (slot: keyof GameClips): Promise<GameClip> => {
+          const b = m[slot]
+          if (!b?.id) return null
+          await preloadClip(b.id)
+          const src = urlCache[b.id]
+          return src ? { src, startTime: b.startTime ?? 0 } : null
+        }
+        void Promise.all([
+          resolve('start'),
+          resolve('place'),
+          resolve('win'),
+          resolve('lose'),
+          resolve('draw'),
+          resolve('idle'),
+        ]).then(([start, place, win, lose, draw, idle]) =>
+          setGameClips({ start, place, win, lose, draw, idle }),
+        )
         return
       }
 
@@ -169,8 +176,8 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
         setIsIdleVideoActive(false)
         setShowOverlay(false)
         setGameSession((prev) => prev + 1)
-        const fallback = data.videoId ? { id: data.videoId, startTime: data.startTime } : null
-        if (!playGameCueByTitle('ticTacToe_start', fallback)) setGameBackground(data.startTime)
+        // The game plays the Start clip itself (via gameClips.start), so no
+        // background load is needed here — just stop the welcome video.
         vid?.pause()
         return
       }
@@ -179,7 +186,6 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
         pendingRef.current = { currentTime: data.startTime, play: true }
         localStorage.setItem('monitorMode', 'video')
         modeRef.current = 'video'
-        setGameBackgroundCue(null)
         setMode('video')
         setShowOverlay(true)
         const wasLoaded = loadedIdRef.current === data.videoId
@@ -191,10 +197,7 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
       }
 
       if (data.type === 'set_tic_tac_toe_background') {
-        if (modeRef.current !== 'tic-tac-toe') return
-        void ensureClip(data.videoId).then((loaded) => {
-          if (loaded) setGameBackground(data.startTime)
-        })
+        // Obsolete: the game now drives its own clips; nothing to swap.
         return
       }
 
@@ -228,12 +231,19 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
       Object.values(urlCache).forEach((u) => URL.revokeObjectURL(u))
       channel.close()
     }
-  }, [ensureClip, playGameCueByTitle, setGameBackground])
+  }, [])
 
   function handleSync() {
     syncedRef.current = true
     setSynced(true)
-    if (localStorage.getItem('monitorMode') === 'tic-tac-toe') {
+    // Restore game mode only on a fresh sync (e.g. after a reload). If the game
+    // is already active — because show_tic_tac_toe arrived before this sync —
+    // don't bump gameSession again, or TicTacToe remounts and the Start clip
+    // plays a second time.
+    if (
+      modeRef.current !== 'tic-tac-toe' &&
+      localStorage.getItem('monitorMode') === 'tic-tac-toe'
+    ) {
       modeRef.current = 'tic-tac-toe'
       setMode('tic-tac-toe')
       setIsIdleVideoActive(false)
@@ -250,12 +260,7 @@ const playGameCueByTitle = useCallback((title: string, fallback?: CueMapEntry | 
       </Head>
       <div className="monitor-font h-screen bg-black relative overflow-hidden">
         {mode === 'tic-tac-toe' ? (
-          <TicTacToe
-            key={gameSession}
-            backgroundCue={gameBackgroundCue}
-            backgroundSrc={videoSrc ?? undefined}
-            onTriggerCue={playGameCueByTitle}
-          />
+          <TicTacToe key={gameSession} clips={gameClips} />
         ) : (
           <video
             ref={videoRef}

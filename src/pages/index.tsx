@@ -5,10 +5,16 @@ import CueCardEdit from "../components/CueCardEdit";
 import CueCardFace from "../components/CueCardFace";
 import { useHotCues } from "../hooks/useHotCues";
 import { useCueGraph } from "../hooks/useCueGraph";
+import { useGameBindings } from "../hooks/useGameBindings";
 import { useSyncBroadcast } from "../hooks/useSyncBroadcast";
 import { getVideo } from "../lib/videoDB";
 import { cueCardBase, cueHighlightClass } from "../lib/cueStyle";
-import type { HotCue } from "../types";
+import {
+  TIC_TAC_TOE_SLOTS,
+  GENERAL_SLOTS,
+  type HotCue,
+  type BindingSlot,
+} from "../types";
 import {
   Monitor,
   Upload,
@@ -33,15 +39,14 @@ function getCueByTitle(cues: HotCue[], title: string): HotCue | undefined {
   return cues.find((c) => c.title === title);
 }
 
-function startsTicTacToe(cue: HotCue) {
-  return /tic[-\s]?tac[-\s]?toe/i.test(cue.title);
-}
-
 function returnsToWelcome(cue: HotCue) {
-  return /\b(welcome|start|home|reset|idle)\b/i.test(cue.title);
+  return /\b(welcome|start|home|reset)\b/i.test(cue.title);
 }
 
-function cueMapEntry(cue?: HotCue) {
+// Resolve a slot's bound cue to the payload the monitor needs to play it.
+function resolveSlot(cues: HotCue[], cueId: string | null) {
+  if (!cueId) return null;
+  const cue = cues.find((c) => c.id === cueId);
   return cue ? { id: cue.id, startTime: cue.startTime } : null;
 }
 
@@ -85,6 +90,14 @@ export default function HotCuePlayer() {
   } = useHotCues(handleCuePress);
 
   const graph = useCueGraph();
+  const { bindings, setBinding, pruneBindings, replaceBindings } =
+    useGameBindings();
+
+  // Latest bindings for use inside imperative callbacks (cue press routing).
+  const bindingsRef = useRef(bindings);
+  useEffect(() => {
+    bindingsRef.current = bindings;
+  });
 
   // Effective active clip: the explicitly selected one if it still exists, else
   // the first cue so the player shows a frame instead of black. Derived, not effect-synced.
@@ -110,7 +123,8 @@ export default function HotCuePlayer() {
     if (!vid || !cue) return;
     vid.currentTime = cue.startTime;
     void vid.play();
-    if (startsTicTacToe(cue)) showTicTacToe(cue.startTime, cue.id);
+    // A cue launches the game when it's the one bound to the "start" slot.
+    if (cue.id === bindingsRef.current.start) showTicTacToe(cue.startTime, cue.id);
     else if (returnsToWelcome(cue)) showWelcome(cue.startTime, cue.id);
     else setTicTacToeBackground(cue.startTime, cue.id);
     pendingCueRef.current = null;
@@ -130,12 +144,16 @@ export default function HotCuePlayer() {
   function handleDeleteCue(i: number) {
     const id = cues[i]?.id;
     deleteCue(i);
-    if (id) graph.removeNode(id);
+    if (id) {
+      graph.removeNode(id);
+      pruneBindings(new Set(cues.filter((c) => c.id !== id).map((c) => c.id)));
+    }
   }
 
   function handleClearCues() {
     clearCues();
     graph.clear();
+    pruneBindings(new Set());
   }
 
   // Targets of the playing cue's outgoing links — highlighted as "up next".
@@ -157,23 +175,33 @@ export default function HotCuePlayer() {
           poked: cues.find((c) => c.title === "poked")?.id || null,
           touched_screen:
             cues.find((c) => c.title === "touched_screen")?.id || null,
-          tic_tac_toe_start: cueMapEntry(
-              getCueByTitle(cues, "TicTacToe"),
-          ),
-          yoda_turn: cueMapEntry(getCueByTitle(cues, "yoda_turn")),
-          draw_scenario: cueMapEntry(getCueByTitle(cues, "draw_scenario")),
-          win_scenario: cueMapEntry(getCueByTitle(cues, "win_scenario")),
-          lose_scenario: cueMapEntry(getCueByTitle(cues, "lose_scenario")),
-          idle: cueMapEntry(getCueByTitle(cues, "idle")),
+        },
+      });
+    };
+
+    const sendGameBindings = () => {
+      channel.postMessage({
+        type: "game_bindings",
+        mapping: {
+          start: resolveSlot(cues, bindings.start),
+          place: resolveSlot(cues, bindings.place),
+          win: resolveSlot(cues, bindings.win),
+          lose: resolveSlot(cues, bindings.lose),
+          draw: resolveSlot(cues, bindings.draw),
+          idle: resolveSlot(cues, bindings.idle),
         },
       });
     };
 
     sendTitlesMap();
+    sendGameBindings();
 
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === "request_initial_state") {
-        setTimeout(sendTitlesMap, 50);
+        setTimeout(() => {
+          sendTitlesMap();
+          sendGameBindings();
+        }, 50);
       }
     };
 
@@ -182,7 +210,7 @@ export default function HotCuePlayer() {
       channel.removeEventListener("message", handleMessage);
       channel.close();
     };
-  }, [cues]);
+  }, [cues, bindings]);
 
   // Load a blob URL for every cue's clip; revoke URLs for removed cues.
   useEffect(() => {
@@ -223,6 +251,35 @@ export default function HotCuePlayer() {
 
   const activeSrc = activeId ? urls[activeId] : undefined;
 
+  // One labelled dropdown linking a clip to a slot, with the bound clip's
+  // keybind shown as a tag; shared by the binding bars.
+  const renderSlotSelect = (slot: { key: BindingSlot; label: string }) => {
+    const boundKey = cues.find((c) => c.id === bindings[slot.key])?.key;
+    return (
+      <label key={slot.key} className="flex items-center gap-1.5">
+        <span className="text-[#aaa]">{slot.label}</span>
+        <select
+          className="bg-[#242424] border border-[#3a3a3a] rounded px-2 h-7 text-[#ddd] max-w-[160px] cursor-pointer hover:border-[#555] focus:outline-none focus:border-[#666]"
+          value={bindings[slot.key] ?? ""}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setBinding(slot.key, e.target.value || null)}
+        >
+          <option value="">— none —</option>
+          {cues.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title || c.fileName}
+            </option>
+          ))}
+        </select>
+        {boundKey && (
+          <kbd className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded border border-[#3a3a3a] bg-[#2a2a2a] text-[#ccc] font-mono text-[11px] leading-none">
+            {boundKey.toUpperCase()}
+          </kbd>
+        )}
+      </label>
+    );
+  };
+
   const toggleBtn = (active: boolean) =>
     `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${
       active
@@ -259,7 +316,10 @@ export default function HotCuePlayer() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) importCues(file);
+            if (file)
+              importCues(file, (data) => {
+                if (data.gameBindings) replaceBindings(data.gameBindings);
+              });
             e.target.value = "";
           }}
         />
@@ -372,7 +432,7 @@ export default function HotCuePlayer() {
               disabled={cues.length === 0}
               onClick={(e) => {
                 e.stopPropagation();
-                exportCues();
+                exportCues({ gameBindings: bindings });
               }}
             >
               <Download size={14} />
@@ -390,6 +450,18 @@ export default function HotCuePlayer() {
               Clear all
             </button>
           </div>
+        </div>
+
+        {/* General clips: cross-game slots (e.g. Idle), reusable beyond Tic-Tac-Toe */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-2 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
+          <span className="text-[#888] font-medium">General clips</span>
+          {GENERAL_SLOTS.map(renderSlotSelect)}
+        </div>
+
+        {/* Tic-Tac-Toe clip bindings: link an uploaded clip to each game slot */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
+          <span className="text-[#888] font-medium">Tic-Tac-Toe clips</span>
+          {TIC_TAC_TOE_SLOTS.map(renderSlotSelect)}
         </div>
 
         {/* Body: list row or node graph */}
@@ -430,7 +502,7 @@ export default function HotCuePlayer() {
               ),
             )}
             <button
-              className="w-16 h-40 bg-transparent border border-dashed border-[#3a3a3a] rounded text-[#555] cursor-pointer text-xl leading-none flex items-center justify-center flex-shrink-0 hover:border-[#666] hover:text-[#aaa]"
+              className="w-16 h-28 bg-transparent border border-dashed border-[#3a3a3a] rounded text-[#555] cursor-pointer text-xl leading-none flex items-center justify-center flex-shrink-0 hover:border-[#666] hover:text-[#aaa]"
               title="Upload clip(s)"
               onClick={(e) => {
                 e.stopPropagation();

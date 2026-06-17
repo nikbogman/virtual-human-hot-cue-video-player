@@ -1,7 +1,7 @@
 // Shared styling for cue cards across the list and graph views.
 
 export const cueCardBase =
-  'relative flex flex-col gap-1 p-2 border rounded w-52 h-40 cursor-pointer overflow-hidden'
+  'relative flex flex-col gap-1 p-2 border rounded w-44 h-28 cursor-pointer overflow-hidden'
 
 // Outline state for a cue card: a bright ring when it's the currently-playing
 // cue, a dashed amber ring when it's an "up next" target of the playing cue.
