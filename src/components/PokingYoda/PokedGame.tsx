@@ -19,9 +19,9 @@ export default function InteractiveOverlay({
           e.stopPropagation();
           onPokeClick();
         }}
-        className="absolute top-[25%] left-[35%] w-[30%] h-[50%] cursor-pointer"
+        className="absolute top-[45%] left-[35%] w-[45%] h-[50%] cursor-pointer"
         // Uncomment below for testing layout:
-        // className="absolute top-[25%] left-[35%] w-[30%] h-[50%] cursor-pointer border-2 border-dashed border-white/50"
+        // className="absolute top-[45%] left-[25%] w-[45%] h-[50%] cursor-pointer border-2 border-dashed border-white/50"
       />
     </div>
   );

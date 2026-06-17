@@ -8,6 +8,8 @@ const WIN_LINES = [
 
 // Fallback delay for dropping Yoda's mark when no "placing" clip is linked.
 const THINK_DELAY = 7000
+// How long the outcome clip plays before the replay prompt (Yes/No) appears.
+const END_CHOICES_DELAY = 12000
 const COMPUTER_MARK_SRC = '/lightsaberGreen.png'
 const HUMAN_MARK_SRC = '/lightsaberRed.png'
 const CHOICE_BUTTON_CLASS =
@@ -89,6 +91,7 @@ export default function TicTacToe({ clips }: Props) {
   const boardRef = useRef(board)
   const backgroundRef = useRef<HTMLVideoElement>(null)
   const thinkTimerRef = useRef<number | undefined>(undefined)
+  const choiceTimerRef = useRef<number | undefined>(undefined)
   const phaseRef = useRef<Phase>('start')
   const reverseRafRef = useRef<number | undefined>(undefined)
   const reversingRef = useRef(false)
@@ -108,11 +111,16 @@ export default function TicTacToe({ clips }: Props) {
   const finishGame = useCallback((message: string) => {
     phaseRef.current = 'over'
     setStatus(message)
-    setShowChoices(true)
     setHumanTurn(false)
     const key = outcomeKey(boardRef.current)
     const clip = key ? clipsRef.current?.[key] : null
     if (clip) setActive({ ...clip, bounce: false, muted: false })
+    // Let the outcome clip play before offering a replay.
+    clearTimeout(choiceTimerRef.current)
+    choiceTimerRef.current = window.setTimeout(
+      () => setShowChoices(true),
+      END_CHOICES_DELAY,
+    )
   }, [])
 
   // Human's turn: loop the idle clip while we wait for a click. With no idle
@@ -166,6 +174,7 @@ export default function TicTacToe({ clips }: Props) {
   }, [goPlacing])
 
   const startNewGame = useCallback(() => {
+    clearTimeout(choiceTimerRef.current)
     setShowChoices(false)
     setShowGrid(true)
     const fresh = emptyBoard()
@@ -177,7 +186,10 @@ export default function TicTacToe({ clips }: Props) {
 
   useEffect(() => {
     startOpening()
-    return () => clearTimeout(thinkTimerRef.current)
+    return () => {
+      clearTimeout(thinkTimerRef.current)
+      clearTimeout(choiceTimerRef.current)
+    }
   }, [startOpening])
 
   // Drive playback for the active clip. Also covers same-src transitions where
@@ -291,6 +303,9 @@ export default function TicTacToe({ clips }: Props) {
             setShowChoices(false)
             setShowGrid(false)
             setStatus('')
+            // Leave the game on the idle clip rather than a frozen frame.
+            const idle = clipsRef.current?.idle
+            if (idle) setActive({ ...idle, bounce: true, muted: true })
           }}
         >
           No
