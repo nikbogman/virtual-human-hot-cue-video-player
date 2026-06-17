@@ -68,24 +68,21 @@ export default function Monitor() {
     if (targetVid) {
       targetVid.currentTime = 0
       void targetVid.play()
+      targetVid.addEventListener('ended', function onEnded() {
+        targetVid.removeEventListener('ended', onEnded)
+        const state = stateBeforeOverlayRef.current
+        if (!state?.videoId) return
+        const restoredId = state.videoId
+        activeVideoIdRef.current = restoredId
+        setActiveVideoId(restoredId)
+        const restoredVid = videoRefsMap.current[restoredId]
+        if (restoredVid) {
+          restoredVid.currentTime = state.currentTime
+          if (state.play) void restoredVid.play()
+        }
+        setShowOverlay(true)
+      }, { once: true })
     }
-
-    window.setTimeout(() => {
-      const state = stateBeforeOverlayRef.current
-      if (!state?.videoId) return
-
-      const restoredId = state.videoId
-      activeVideoIdRef.current = restoredId
-      setActiveVideoId(restoredId)
-
-      const restoredVid = videoRefsMap.current[restoredId]
-      if (restoredVid) {
-        restoredVid.currentTime = state.currentTime
-        if (state.play) void restoredVid.play()
-      }
-
-      setShowOverlay(true)
-    }, 3000)
   }
 
   function handlePokeClick() {
