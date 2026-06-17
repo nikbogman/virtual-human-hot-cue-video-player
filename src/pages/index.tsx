@@ -38,7 +38,11 @@ function startsTicTacToe(cue: HotCue) {
 }
 
 function returnsToWelcome(cue: HotCue) {
-  return /\b(welcome|start|home|reset)\b/i.test(cue.title);
+  return /\b(welcome|start|home|reset|idle)\b/i.test(cue.title);
+}
+
+function cueMapEntry(cue?: HotCue) {
+  return cue ? { id: cue.id, startTime: cue.startTime } : null;
 }
 
 export default function HotCuePlayer() {
@@ -153,6 +157,14 @@ export default function HotCuePlayer() {
           poked: cues.find((c) => c.title === "poked")?.id || null,
           touched_screen:
             cues.find((c) => c.title === "touched_screen")?.id || null,
+          tic_tac_toe_start: cueMapEntry(
+              getCueByTitle(cues, "TicTacToe"),
+          ),
+          yoda_turn: cueMapEntry(getCueByTitle(cues, "yoda_turn")),
+          draw_scenario: cueMapEntry(getCueByTitle(cues, "draw_scenario")),
+          win_scenario: cueMapEntry(getCueByTitle(cues, "win_scenario")),
+          lose_scenario: cueMapEntry(getCueByTitle(cues, "lose_scenario")),
+          idle: cueMapEntry(getCueByTitle(cues, "idle")),
         },
       });
     };
