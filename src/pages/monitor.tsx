@@ -7,21 +7,22 @@ import { getVideo } from '../lib/videoDB'
 type MonitorMode = 'video' | 'tic-tac-toe'
 
 export default function Monitor() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [synced, setSynced] = useState(false)
   const [mode, setMode] = useState<MonitorMode>('video')
   const [gameBackgroundCue, setGameBackgroundCue] = useState<{ startTime: number; version: number } | null>(null)
   const [gameSession, setGameSession] = useState(0)
   const [isIdleVideoActive, setIsIdleVideoActive] = useState(false)
   const [showOverlay, setShowOverlay] = useState(true)
+  const [knownVideos, setKnownVideos] = useState<Record<string, string>>({})
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
 
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
   const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(null)
   const modeRef = useRef<MonitorMode>('video')
+  const activeVideoIdRef = useRef<string | null>(null)
+  const videoRefsMap = useRef<Record<string, HTMLVideoElement | null>>({})
 
-  const loadedIdRef = useRef<string | null>(null)
   const urlCacheRef = useRef<Record<string, string>>({})
   const pokedIdRef = useRef<string | null>(null)
   const touchedScreenIdRef = useRef<string | null>(null)
@@ -30,6 +31,10 @@ export default function Monitor() {
   useEffect(() => {
     modeRef.current = mode
   }, [mode])
+
+  useEffect(() => {
+    activeVideoIdRef.current = activeVideoId
+  }, [activeVideoId])
 
   function applyPending(vid: HTMLVideoElement) {
     const p = pendingRef.current
@@ -40,42 +45,43 @@ export default function Monitor() {
     pendingRef.current = null
   }
 
-  function playVideoWhenReady(video: HTMLVideoElement) {
-    const playHandler = () => {
-      video.removeEventListener('canplay', playHandler)
-      video.play().catch((err) => console.error('Play error:', err))
-    }
-    video.addEventListener('canplay', playHandler)
-  }
+  function triggerOverlayVideo(targetId: string | null) {
+    if (!targetId || modeRef.current !== 'video') return
+    if (!urlCacheRef.current[targetId]) return
 
-  function triggerOverlayVideo(targetUrl: string | null) {
-    const vid = videoRef.current
-    if (!vid || !targetUrl || modeRef.current !== 'video') return
+    const prevId = activeVideoIdRef.current
+    const prevVid = prevId ? videoRefsMap.current[prevId] : null
 
     stateBeforeOverlayRef.current = {
-      videoId: loadedIdRef.current,
-      currentTime: vid.currentTime,
-      play: !vid.paused,
+      videoId: prevId,
+      currentTime: prevVid?.currentTime ?? 0,
+      play: prevVid ? !prevVid.paused : false,
     }
 
     setShowOverlay(false)
-    vid.pause()
-    vid.src = targetUrl
-    vid.currentTime = 0
-    vid.load()
-    playVideoWhenReady(vid)
+    prevVid?.pause()
+
+    activeVideoIdRef.current = targetId
+    setActiveVideoId(targetId)
+
+    const targetVid = videoRefsMap.current[targetId]
+    if (targetVid) {
+      targetVid.currentTime = 0
+      void targetVid.play()
+    }
 
     window.setTimeout(() => {
       const state = stateBeforeOverlayRef.current
-      if (!state) return
+      if (!state?.videoId) return
 
-      const idleUrl = state.videoId ? urlCacheRef.current[state.videoId] : null
-      if (idleUrl) {
-        vid.pause()
-        vid.src = idleUrl
-        vid.currentTime = state.currentTime
-        vid.load()
-        if (state.play) playVideoWhenReady(vid)
+      const restoredId = state.videoId
+      activeVideoIdRef.current = restoredId
+      setActiveVideoId(restoredId)
+
+      const restoredVid = videoRefsMap.current[restoredId]
+      if (restoredVid) {
+        restoredVid.currentTime = state.currentTime
+        if (state.play) void restoredVid.play()
       }
 
       setShowOverlay(true)
@@ -83,13 +89,11 @@ export default function Monitor() {
   }
 
   function handlePokeClick() {
-    const targetUrl = pokedIdRef.current ? urlCacheRef.current[pokedIdRef.current] : null
-    triggerOverlayVideo(targetUrl)
+    triggerOverlayVideo(pokedIdRef.current)
   }
 
   function handleBackgroundClick() {
-    const targetUrl = touchedScreenIdRef.current ? urlCacheRef.current[touchedScreenIdRef.current] : null
-    triggerOverlayVideo(targetUrl)
+    triggerOverlayVideo(touchedScreenIdRef.current)
   }
 
   useEffect(() => {
@@ -98,14 +102,19 @@ export default function Monitor() {
     const urlCache = urlCacheRef.current
 
     async function preloadClip(id: string | null) {
-      if (!id || urlCache[id]) return
-      const file = await getVideo(id)
-      if (!file) return
-      urlCache[id] = URL.createObjectURL(file)
+      if (!id) return
+      let url = urlCache[id]
+      if (!url) {
+        const file = await getVideo(id)
+        if (!file) return
+        url = URL.createObjectURL(file)
+        urlCache[id] = url
+      }
+      setKnownVideos((prev) => (id in prev ? prev : { ...prev, [id]: url }))
     }
 
     async function ensureClip(id: string | null) {
-      if (!id || loadedIdRef.current === id) return true
+      if (!id) return false
       let url = urlCache[id]
       if (!url) {
         const file = await getVideo(id)
@@ -113,8 +122,11 @@ export default function Monitor() {
         url = URL.createObjectURL(file)
         urlCache[id] = url
       }
-      loadedIdRef.current = id
-      setVideoSrc(url)
+      setKnownVideos((prev) => (id in prev ? prev : { ...prev, [id]: url }))
+      if (activeVideoIdRef.current !== id) {
+        activeVideoIdRef.current = id
+        setActiveVideoId(id)
+      }
       return true
     }
 
@@ -134,8 +146,6 @@ export default function Monitor() {
         return
       }
 
-      const vid = videoRef.current
-
       if (data.type === 'show_tic_tac_toe') {
         pendingRef.current = null
         localStorage.setItem('monitorMode', 'tic-tac-toe')
@@ -147,7 +157,8 @@ export default function Monitor() {
         void ensureClip(data.videoId).then((loaded) => {
           if (loaded) setGameBackground(data.startTime)
         })
-        vid?.pause()
+        const activeId = activeVideoIdRef.current
+        if (activeId) videoRefsMap.current[activeId]?.pause()
         return
       }
 
@@ -158,10 +169,9 @@ export default function Monitor() {
         setGameBackgroundCue(null)
         setMode('video')
         setShowOverlay(true)
-        const wasLoaded = loadedIdRef.current === data.videoId
         void ensureClip(data.videoId).then(() => {
-          const v = videoRef.current
-          if (v && wasLoaded && v.readyState >= 1) applyPending(v)
+          const v = videoRefsMap.current[data.videoId]
+          if (v && v.readyState >= 1) applyPending(v)
         })
         return
       }
@@ -174,8 +184,6 @@ export default function Monitor() {
         return
       }
 
-      if (!vid) return
-
       let play: boolean
       if (data.type === 'send_initial_state') {
         if (!syncedRef.current) return
@@ -185,6 +193,9 @@ export default function Monitor() {
       } else if (data.type === 'pause') {
         play = false
       } else if (data.type === 'seek') {
+        const activeId = activeVideoIdRef.current
+        const vid = activeId ? videoRefsMap.current[activeId] : null
+        if (!vid) return
         play = !vid.paused
       } else {
         return
@@ -192,11 +203,10 @@ export default function Monitor() {
 
       setIsIdleVideoActive(data.isIdle === true)
       pendingRef.current = { currentTime: data.currentTime, play }
-      const wasLoaded = loadedIdRef.current === data.videoId
       void ensureClip(data.videoId).then(() => {
-        const v = videoRef.current
         if (modeRef.current === 'tic-tac-toe') return
-        if (v && wasLoaded && v.readyState >= 1) applyPending(v)
+        const v = videoRefsMap.current[data.videoId]
+        if (v && v.readyState >= 1) applyPending(v)
       })
     })
 
@@ -225,18 +235,27 @@ export default function Monitor() {
         <title>Monitor — Hot Cue Player</title>
       </Head>
       <div className="monitor-font h-screen bg-black relative overflow-hidden">
-        {mode === 'tic-tac-toe' ? (
+        {Object.entries(knownVideos).map(([id, url]) => (
+          <video
+            key={id}
+            ref={(el) => { videoRefsMap.current[id] = el }}
+            src={url}
+            preload="auto"
+            className={`absolute inset-0 w-full h-full object-contain ${
+              mode === 'video' && activeVideoId === id
+                ? 'opacity-100 z-10'
+                : 'opacity-0 z-0 pointer-events-none'
+            }`}
+            onLoadedMetadata={() => {
+              if (id === activeVideoIdRef.current) applyPending(videoRefsMap.current[id]!)
+            }}
+          />
+        ))}
+        {mode === 'tic-tac-toe' && (
           <TicTacToe
             key={gameSession}
             backgroundCue={gameBackgroundCue}
-            backgroundSrc={videoSrc ?? undefined}
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            src={videoSrc ?? undefined}
-            className="w-full h-full object-contain"
-            onLoadedMetadata={() => applyPending(videoRef.current!)}
+            backgroundSrc={activeVideoId ? knownVideos[activeVideoId] : undefined}
           />
         )}
         {!synced && (
