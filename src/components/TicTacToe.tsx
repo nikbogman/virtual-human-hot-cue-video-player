@@ -1,0 +1,201 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+const WIN_LINES = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6],
+]
+
+const THINK_DELAY = 7000
+const OPENING_THINK_DELAY = 13000
+const COMPUTER_MARK_SRC = '/lightsaberGreen.png'
+const HUMAN_MARK_SRC = '/lightsaberRed.png'
+const CHOICE_BUTTON_CLASS =
+  'h-[100px] w-[200px] cursor-pointer rounded-xl bg-white/[0.98] text-[2.5rem] font-bold text-[#616640] ' +
+  'shadow-[0_4px_20px_rgba(6,82,11,0.35)] hover:bg-[#9bb38cb6]'
+const CELL_CLASS =
+  'grid h-[100px] w-[100px] cursor-pointer place-items-center border-0 bg-[rgba(169,171,156,0.5)] p-0'
+
+function emptyBoard() {
+  return Array<string>(9).fill('')
+}
+
+function getWinner(board: string[]) {
+  for (const [a, b, c] of WIN_LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return board[a]
+    }
+  }
+  return null
+}
+
+interface Props {
+  backgroundCue?: { startTime: number; version: number } | null
+  backgroundSrc?: string
+}
+
+function endMessage(board: string[]) {
+  const winner = getWinner(board)
+  if (winner === 'O') return 'You win!'
+  if (winner === 'X') return 'Yoda wins!'
+  if (board.every((cell) => cell)) return 'Draw!'
+  return null
+}
+
+function markVisual(mark: string) {
+  if (mark === 'X') return { src: COMPUTER_MARK_SRC, alt: 'Computer lightsaber' }
+  if (mark === 'O') return { src: HUMAN_MARK_SRC, alt: 'User lightsaber' }
+  return null
+}
+
+export default function TicTacToe({ backgroundCue, backgroundSrc }: Props) {
+  const [board, setBoard] = useState(emptyBoard)
+  const [humanTurn, setHumanTurn] = useState(false)
+  const [status, setStatus] = useState('')
+  const [showChoices, setShowChoices] = useState(false)
+  const [showGrid, setShowGrid] = useState(true)
+  const gameOverRef = useRef(false)
+  const boardRef = useRef(board)
+  const backgroundRef = useRef<HTMLVideoElement>(null)
+  const thinkTimerRef = useRef<number | undefined>(undefined)
+
+  useEffect(() => {
+    boardRef.current = board
+  }, [board])
+
+  const finishGame = useCallback((message: string) => {
+    gameOverRef.current = true
+    setStatus(message)
+    setShowChoices(true)
+    setHumanTurn(false)
+  }, [])
+
+  const runComputerTurn = useCallback((delay = THINK_DELAY) => {
+    clearTimeout(thinkTimerRef.current)
+    thinkTimerRef.current = window.setTimeout(() => {
+      if (gameOverRef.current) return
+
+      const prev = boardRef.current
+      const empty = prev
+        .map((cell, i) => (cell ? -1 : i))
+        .filter((i) => i >= 0)
+      if (empty.length === 0) return
+
+      const next = [...prev]
+      next[empty[Math.floor(Math.random() * empty.length)]] = 'X'
+      boardRef.current = next
+      setBoard(next)
+
+      const msg = endMessage(next)
+      if (msg) finishGame(msg)
+      else {
+        setHumanTurn(true)
+        setStatus('')
+      }
+    }, delay)
+  }, [finishGame])
+
+  const startNewGame = useCallback(() => {
+    gameOverRef.current = false
+    setShowChoices(false)
+    setShowGrid(true)
+    const fresh = emptyBoard()
+    boardRef.current = fresh
+    setBoard(fresh)
+    setStatus('')
+    setHumanTurn(false)
+    runComputerTurn(OPENING_THINK_DELAY)
+  }, [runComputerTurn])
+
+  useEffect(() => {
+    runComputerTurn(OPENING_THINK_DELAY)
+    return () => clearTimeout(thinkTimerRef.current)
+  }, [runComputerTurn])
+
+  useEffect(() => {
+    const vid = backgroundRef.current
+    if (!vid || !backgroundCue) return
+    vid.currentTime = backgroundCue.startTime
+    void vid.play()
+  }, [backgroundCue])
+
+  function onCellClick(index: number) {
+    if (gameOverRef.current || !humanTurn || board[index]) return
+
+    const next = [...board]
+    next[index] = 'O'
+    boardRef.current = next
+    setBoard(next)
+
+    const msg = endMessage(next)
+    if (msg) {
+      finishGame(msg)
+      return
+    }
+    setHumanTurn(false)
+    runComputerTurn()
+  }
+
+  return (
+    <div className="relative min-h-screen overflow-hidden">
+      <video
+        ref={backgroundRef}
+        className="fixed inset-0 z-0 h-full w-full"
+        src={backgroundSrc}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={() => {
+          if (!backgroundCue || !backgroundRef.current) return
+          backgroundRef.current.currentTime = backgroundCue.startTime
+          void backgroundRef.current.play()
+        }}
+      />
+
+      <p className="fixed left-1/2 top-[10%] z-[3] min-h-16 -translate-x-1/2 text-6xl text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.8)]">
+        {status}
+      </p>
+
+      <div
+        className={`${showChoices ? 'flex' : 'hidden'} fixed inset-x-0 bottom-0 top-[-40%] z-10 items-center justify-center gap-8`}
+      >
+        <button type="button" className={CHOICE_BUTTON_CLASS} onClick={startNewGame}>
+          Yes
+        </button>
+        <button
+          type="button"
+          className={CHOICE_BUTTON_CLASS}
+          onClick={() => {
+            setShowChoices(false)
+            setShowGrid(false)
+            setStatus('')
+          }}
+        >
+          No
+        </button>
+      </div>
+
+      {showGrid && (
+        <div className="fixed left-1/2 top-[80%] z-[1] grid -translate-x-1/2 -translate-y-1/2 grid-cols-[repeat(3,100px)] grid-rows-[repeat(3,100px)] gap-1">
+          {board.map((mark, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`${CELL_CLASS}${mark ? ' cursor-default' : ''}`}
+              onClick={() => onCellClick(i)}
+            >
+              {mark ? (
+                <img
+                  className="h-[84px] w-[84px] select-none object-contain pointer-events-none"
+                  src={markVisual(mark)?.src}
+                  alt={markVisual(mark)?.alt ?? ''}
+                  draggable={false}
+                />
+              ) : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
