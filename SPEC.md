@@ -147,7 +147,7 @@ Video files — one clip per cue, persisted in IndexedDB keyed by cue id
 - The playing card lights up (persistent white outline) in both views; cues connected as its "next" steps get a dashed-amber "up next" highlight so the controller can find them quickly
 - Key presses are ignored while a text input has focus
 - A video with a title _"idle"_ runs an **InteractiveOverlay** function that enables for the user to interact with the character displayed on the monitor as the videos automatically play and go back to idle after 3 sec.
-- Labels containing `tic-tac-toe` or `tic tac toe` switch the monitor to a fresh tic-tac-toe game
+- The label `TicTacToe` switches the monitor to a fresh tic-tac-toe game
 - Labels containing `welcome`, `start`, `home`, or `reset` return the monitor to video mode at that cue's start time
 - While the monitor is in tic-tac-toe mode, other hot cues manually change the game background video to that cue's start time
 
@@ -222,6 +222,17 @@ The monitor can switch between:
    * Interactive game screen.
    * Independent game state.
    * Video background synchronized through Hot Cues.
+
+##### Hot cue titles map 
+The game component is requesting the named background cues at the right moments.
+
+* poked: "poked"
+* touched_screen: "touched_screen"
+* ticTacToe_start: "ticTacToe_start"
+* yoda_turn: "yoda_turn"
+* draw_scenario: "draw_scenario"
+* win_scenario: "win_scenario"
+* lose_scenario: "lose_scenario"
 
 #### Gameplay Flow
 

@@ -52,7 +52,7 @@ export default function CueCardFace({ cue, onEdit, onDelete }: Props) {
       </div>
       <div className="flex flex-col gap-0.5">
         <span className={captionCls}>Label</span>
-        <span className="text-[11px] text-[#bbb] leading-snug line-clamp-3">{cue.label || '—'}</span>
+        <span className="text-[11px] text-[#bbb] leading-snug line-clamp-2">{cue.label || '—'}</span>
       </div>
     </>
   )

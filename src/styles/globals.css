@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Death Star';
+  src: url('/deathStar.otf') format('opentype');
+  font-weight: 400;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
