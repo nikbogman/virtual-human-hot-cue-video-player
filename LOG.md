@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-06-17
+
+Make an automatic connection between the background video and corresponding Tic Tac Toe response. Currently the videos automatically trigger hot cues named as follows: 
+    poked: "poked"
+    touched_screen: "touched_screen"
+    ticTacToe_start: "TicTacToe"
+    yoda_turn: "yoda_turn"
+    draw_scenario: "draw_scenario"
+    win_scenario: "win_scenario"
+    lose_scenario: "lose_scenario"
+
+To trigger the TicTacToe game the name needs to be specifically TicTacToe. 
+Yes restarts the game.
+No triggers idle state. 
+
 ## 2026-06-13
 
 Updated the Tic Tc Toe UI by lowering the playing field based on Yoda position. Adjusted think delays to match the "using the forse" video length, included initial think delay for VH opening line and first "using the forse" videos. Fixed the static background issue - the game again uses a bg video based on the hot cue use. 
