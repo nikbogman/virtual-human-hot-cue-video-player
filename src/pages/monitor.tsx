@@ -6,15 +6,32 @@ import { getVideo } from '../lib/videoDB'
 
 type MonitorMode = 'video' | 'tic-tac-toe'
 
+type GameClip = { src: string; startTime: number } | null
+export type GameClips = {
+  start: GameClip
+  place: GameClip
+  win: GameClip
+  lose: GameClip
+  draw: GameClip
+  idle: GameClip
+}
+
 export default function Monitor() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [synced, setSynced] = useState(false)
   const [mode, setMode] = useState<MonitorMode>('video')
-  const [gameBackgroundCue, setGameBackgroundCue] = useState<{ startTime: number; version: number } | null>(null)
   const [gameSession, setGameSession] = useState(0)
   const [isIdleVideoActive, setIsIdleVideoActive] = useState(false)
   const [showOverlay, setShowOverlay] = useState(true)
+  const [gameClips, setGameClips] = useState<GameClips>({
+    start: null,
+    place: null,
+    win: null,
+    lose: null,
+    draw: null,
+    idle: null,
+  })
 
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
@@ -118,19 +135,34 @@ export default function Monitor() {
       return true
     }
 
-    function setGameBackground(startTime: number) {
-      setGameBackgroundCue((prev) => ({
-        startTime,
-        version: (prev?.version ?? 0) + 1,
-      }))
-    }
-
     channel.addEventListener('message', ({ data }) => {
       if (data.type === 'titles_map') {
         pokedIdRef.current = data.mapping.poked
         touchedScreenIdRef.current = data.mapping.touched_screen
         if (data.mapping.poked) void preloadClip(data.mapping.poked)
         if (data.mapping.touched_screen) void preloadClip(data.mapping.touched_screen)
+        return
+      }
+
+      if (data.type === 'game_bindings') {
+        const m = data.mapping ?? {}
+        const resolve = async (slot: keyof GameClips): Promise<GameClip> => {
+          const b = m[slot]
+          if (!b?.id) return null
+          await preloadClip(b.id)
+          const src = urlCache[b.id]
+          return src ? { src, startTime: b.startTime ?? 0 } : null
+        }
+        void Promise.all([
+          resolve('start'),
+          resolve('place'),
+          resolve('win'),
+          resolve('lose'),
+          resolve('draw'),
+          resolve('idle'),
+        ]).then(([start, place, win, lose, draw, idle]) =>
+          setGameClips({ start, place, win, lose, draw, idle }),
+        )
         return
       }
 
@@ -144,9 +176,8 @@ export default function Monitor() {
         setIsIdleVideoActive(false)
         setShowOverlay(false)
         setGameSession((prev) => prev + 1)
-        void ensureClip(data.videoId).then((loaded) => {
-          if (loaded) setGameBackground(data.startTime)
-        })
+        // The game plays the Start clip itself (via gameClips.start), so no
+        // background load is needed here — just stop the welcome video.
         vid?.pause()
         return
       }
@@ -155,7 +186,6 @@ export default function Monitor() {
         pendingRef.current = { currentTime: data.startTime, play: true }
         localStorage.setItem('monitorMode', 'video')
         modeRef.current = 'video'
-        setGameBackgroundCue(null)
         setMode('video')
         setShowOverlay(true)
         const wasLoaded = loadedIdRef.current === data.videoId
@@ -167,10 +197,7 @@ export default function Monitor() {
       }
 
       if (data.type === 'set_tic_tac_toe_background') {
-        if (modeRef.current !== 'tic-tac-toe') return
-        void ensureClip(data.videoId).then((loaded) => {
-          if (loaded) setGameBackground(data.startTime)
-        })
+        // Obsolete: the game now drives its own clips; nothing to swap.
         return
       }
 
@@ -209,7 +236,14 @@ export default function Monitor() {
   function handleSync() {
     syncedRef.current = true
     setSynced(true)
-    if (localStorage.getItem('monitorMode') === 'tic-tac-toe') {
+    // Restore game mode only on a fresh sync (e.g. after a reload). If the game
+    // is already active — because show_tic_tac_toe arrived before this sync —
+    // don't bump gameSession again, or TicTacToe remounts and the Start clip
+    // plays a second time.
+    if (
+      modeRef.current !== 'tic-tac-toe' &&
+      localStorage.getItem('monitorMode') === 'tic-tac-toe'
+    ) {
       modeRef.current = 'tic-tac-toe'
       setMode('tic-tac-toe')
       setIsIdleVideoActive(false)
@@ -226,11 +260,7 @@ export default function Monitor() {
       </Head>
       <div className="monitor-font h-screen bg-black relative overflow-hidden">
         {mode === 'tic-tac-toe' ? (
-          <TicTacToe
-            key={gameSession}
-            backgroundCue={gameBackgroundCue}
-            backgroundSrc={videoSrc ?? undefined}
-          />
+          <TicTacToe key={gameSession} clips={gameClips} />
         ) : (
           <video
             ref={videoRef}
