@@ -74,6 +74,20 @@ export function useSyncBroadcast(
     channel.postMessage({ type: 'set_tic_tac_toe_background', videoId, startTime })
     channel.close()
   }
+  function showRockPaperScissors(
+  startTime: number,
+  videoId: string | null = getVideoIdRef.current()
+) {
+  localStorage.setItem('monitorMode', 'rock-paper-scissors')
+  const channel = new BroadcastChannel('video_sync')
+  channel.postMessage({
+    type: 'show_rock_paper_scissors',
+    videoId,
+    startTime,
+  })
+  channel.close()
+}
 
-  return { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground }
+
+  return { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground, showRockPaperScissors }
 }

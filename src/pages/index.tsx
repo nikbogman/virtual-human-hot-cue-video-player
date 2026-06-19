@@ -63,6 +63,7 @@ export default function HotCuePlayer() {
   useEffect(() => {
     urlsRef.current = urls;
   });
+  
 
   // The explicitly triggered clip; defaults to the first cue (see activeId below).
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,7 +111,7 @@ export default function HotCuePlayer() {
     activeIdRef.current = activeId;
   });
 
-  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } =
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground, showRockPaperScissors } =
     useSyncBroadcast(
       videoRef,
       () => activeIdRef.current,
@@ -124,9 +125,18 @@ export default function HotCuePlayer() {
     vid.currentTime = cue.startTime;
     void vid.play();
     // A cue launches the game when it's the one bound to the "start" slot.
-    if (cue.id === bindingsRef.current.start) showTicTacToe(cue.startTime, cue.id);
-    else if (returnsToWelcome(cue)) showWelcome(cue.startTime, cue.id);
-    else setTicTacToeBackground(cue.startTime, cue.id);
+if (cue.title.toLowerCase().includes('rps')) {
+  showRockPaperScissors(cue.startTime, cue.id)
+}
+else if (cue.id === bindingsRef.current.start) {
+  showTicTacToe(cue.startTime, cue.id)
+}
+else if (returnsToWelcome(cue)) {
+  showWelcome(cue.startTime, cue.id)
+}
+else {
+  setTicTacToeBackground(cue.startTime, cue.id)
+}
     pendingCueRef.current = null;
   }
 
@@ -417,6 +427,7 @@ export default function HotCuePlayer() {
               <Monitor size={14} />
               Open monitor
             </button>
+            
             <button
               className={btnCls}
               onClick={(e) => {
@@ -534,5 +545,6 @@ export default function HotCuePlayer() {
         )}
       </div>
     </>
+    
   );
 }

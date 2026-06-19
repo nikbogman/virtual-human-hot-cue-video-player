@@ -11,53 +11,45 @@ export function useHandGesture() {
 
   useEffect(() => {
     let running = true
+    let stream: MediaStream | null = null
 
     async function start() {
-      const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: true
-        })
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      })
 
       const video = document.createElement("video")
-
       video.srcObject = stream
-
       await video.play()
 
-      const vision =
-        await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-        )
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      )
 
-      const handLandmarker =
-        await HandLandmarker.createFromOptions(
-          vision,
-          {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-            },
-            runningMode: "VIDEO",
-            numHands: 1
-          }
-        )
+      const handLandmarker = await HandLandmarker.createFromOptions(
+        vision,
+        {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+        }
+      )
 
       function loop() {
         if (!running) return
 
-        const result =
-          handLandmarker.detectForVideo(
-            video,
-            performance.now()
-          )
+        const result = handLandmarker.detectForVideo(
+          video,
+          performance.now()
+        )
 
-        const hand =
-          result.landmarks?.[0]
+        const hand = result.landmarks?.[0]
 
         if (hand) {
-          const gesture =
-            detectGesture(hand)
-
+          const gesture = detectGesture(hand)
           setMove(gesture)
         }
 
@@ -71,6 +63,11 @@ export function useHandGesture() {
 
     return () => {
       running = false
+
+      
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop())
+      }
     }
   }, [])
 

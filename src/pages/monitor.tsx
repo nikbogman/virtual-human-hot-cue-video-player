@@ -8,7 +8,7 @@ import { getVideo } from '../lib/videoDB'
 
 import RockPaperScissors from '../components/RockPaperScissors/RockPaperScissors'
 
-type MonitorMode = 'video' | 'tic-tac-toe'
+type MonitorMode = 'video' | 'tic-tac-toe'| 'rock-paper-scissors'
 
 type GameClip = { src: string; startTime: number } | null
 export type GameClips = {
@@ -18,6 +18,22 @@ export type GameClips = {
   lose: GameClip
   draw: GameClip
   idle: GameClip
+  
+}
+export type RPSClips = {
+  intro: GameClip
+
+  rock_win: GameClip
+  rock_lose: GameClip
+  rock_draw: GameClip
+
+  paper_win: GameClip
+  paper_lose: GameClip
+  paper_draw: GameClip
+
+  scissors_win: GameClip
+  scissors_lose: GameClip
+  scissors_draw: GameClip
 }
 
 export default function Monitor() {
@@ -26,6 +42,7 @@ export default function Monitor() {
   const [synced, setSynced] = useState(false)
   const [mode, setMode] = useState<MonitorMode>('video')
   const [gameSession, setGameSession] = useState(0)
+  const [rpsSession, setRpsSession] = useState(0)
   const [isIdleVideoActive, setIsIdleVideoActive] = useState(false)
   const [showOverlay, setShowOverlay] = useState(true)
   const [gameClips, setGameClips] = useState<GameClips>({
@@ -36,7 +53,21 @@ export default function Monitor() {
     draw: null,
     idle: null,
   })
+const [rpsClips, setRpsClips] = useState<RPSClips>({
+  intro: null,
 
+  rock_win: null,
+  rock_lose: null,
+  rock_draw: null,
+
+  paper_win: null,
+  paper_lose: null,
+  paper_draw: null,
+
+  scissors_win: null,
+  scissors_lose: null,
+  scissors_draw: null,
+})
   const channelRef = useRef<BroadcastChannel | null>(null)
   const syncedRef = useRef(false)
   const pendingRef = useRef<{ currentTime: number; play: boolean } | null>(null)
@@ -149,26 +180,107 @@ export default function Monitor() {
       }
 
       if (data.type === 'game_bindings') {
-        const m = data.mapping ?? {}
-        const resolve = async (slot: keyof GameClips): Promise<GameClip> => {
-          const b = m[slot]
-          if (!b?.id) return null
-          await preloadClip(b.id)
-          const src = urlCache[b.id]
-          return src ? { src, startTime: b.startTime ?? 0 } : null
-        }
-        void Promise.all([
-          resolve('start'),
-          resolve('place'),
-          resolve('win'),
-          resolve('lose'),
-          resolve('draw'),
-          resolve('idle'),
-        ]).then(([start, place, win, lose, draw, idle]) =>
-          setGameClips({ start, place, win, lose, draw, idle }),
-        )
-        return
-      }
+  const m = data.mapping ?? {}
+
+  // -------------------------
+  // TIC TAC TOE RESOLVER
+  // -------------------------
+  const resolve = async (slot: keyof GameClips): Promise<GameClip> => {
+    const b = (m as any)[slot]
+    if (!b?.id) return null
+
+    await preloadClip(b.id)
+    const src = urlCache[b.id]
+
+    return src ? { src, startTime: b.startTime ?? 0 } : null
+  }
+
+  // -------------------------
+  // RPS RESOLVER
+  // -------------------------
+  const resolveRPS = async (slot: keyof RPSClips): Promise<GameClip> => {
+    const b = (m as any)[slot]
+    if (!b?.id) return null
+
+    await preloadClip(b.id)
+    const src = urlCache[b.id]
+
+    return src ? { src, startTime: b.startTime ?? 0 } : null
+  }
+
+  Promise.all([
+    // -------------------------
+    // TIC TAC TOE CLIPS
+    // -------------------------
+    resolve('start'),
+    resolve('place'),
+    resolve('win'),
+    resolve('lose'),
+    resolve('draw'),
+    resolve('idle'),
+
+    // -------------------------
+    // RPS CLIPS
+    // -------------------------
+    resolveRPS('intro'),
+
+    resolveRPS('rock_win'),
+    resolveRPS('rock_lose'),
+    resolveRPS('rock_draw'),
+
+    resolveRPS('paper_win'),
+    resolveRPS('paper_lose'),
+    resolveRPS('paper_draw'),
+
+    resolveRPS('scissors_win'),
+    resolveRPS('scissors_lose'),
+    resolveRPS('scissors_draw'),
+  ]).then((results) => {
+    const [
+      start,
+      place,
+      win,
+      lose,
+      draw,
+      idle,
+
+      intro,
+      rock_win,
+      rock_lose,
+      rock_draw,
+      paper_win,
+      paper_lose,
+      paper_draw,
+      scissors_win,
+      scissors_lose,
+      scissors_draw,
+    ] = results
+
+    setGameClips({
+      start,
+      place,
+      win,
+      lose,
+      draw,
+      idle,
+    })
+
+    setRpsClips({
+      intro,
+      rock_win,
+      rock_lose,
+      rock_draw,
+      paper_win,
+      paper_lose,
+      paper_draw,
+      scissors_win,
+      scissors_lose,
+      scissors_draw,
+    })
+  })
+
+  return
+}
 
       const vid = videoRef.current
 
@@ -185,6 +297,17 @@ export default function Monitor() {
         vid?.pause()
         return
       }
+      if (data.type === 'show_rock_paper_scissors') {
+  pendingRef.current = null
+  localStorage.setItem('monitorMode', 'rock-paper-scissors')
+  modeRef.current = 'rock-paper-scissors'
+  setMode('rock-paper-scissors')
+  setIsIdleVideoActive(false)
+  setShowOverlay(false)
+  setRpsSession((prev) => prev + 1)
+  vid?.pause()
+  return
+}
 
       if (data.type === 'show_welcome') {
         pendingRef.current = { currentTime: data.startTime, play: true }
@@ -204,6 +327,7 @@ export default function Monitor() {
         // Obsolete: the game now drives its own clips; nothing to swap.
         return
       }
+      
 
       if (!vid) return
 
@@ -263,17 +387,26 @@ export default function Monitor() {
         <title>Monitor — Hot Cue Player</title>
       </Head>
       
-      <div className="monitor-font h-screen bg-black relative overflow-hidden">
-        {mode === 'tic-tac-toe' ? (
-          <TicTacToe key={gameSession} clips={gameClips} />
-        ) : (
-          <video
-            ref={videoRef}
-            src={videoSrc ?? undefined}
-            className="w-full h-full object-contain"
-            onLoadedMetadata={() => applyPending(videoRef.current!)}
-          />
-        )}
+   <div className="monitor-font h-screen bg-black relative overflow-hidden">
+  {/* ALWAYS keep video mounted */}
+  <video
+    ref={videoRef}
+    src={videoSrc ?? undefined}
+    className="w-full h-full object-contain"
+    onLoadedMetadata={() => applyPending(videoRef.current!)}
+  />
+
+  {/* overlays */}
+  {mode === 'tic-tac-toe' && (
+    <TicTacToe key={gameSession} clips={gameClips} />
+  )}
+
+  {mode === 'rock-paper-scissors' && (
+    <div className="absolute inset-0 z-50">
+      <RockPaperScissors key={rpsSession} clips={rpsClips} />
+    </div>
+  )}
+
         
         {!synced && (
           <div
