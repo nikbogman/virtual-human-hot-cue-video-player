@@ -40,11 +40,19 @@ export default function RockPaperScissors({ clips }: { clips: RPSClips }) {
   const holdRef = useRef<NodeJS.Timeout | null>(null)
 
   // ---------- INTRO ----------
-  useEffect(() => {
-    if (clips.intro?.src) {
-      setCurrentClip(clips.intro.src)
-    }
-  }, [clips])
+useEffect(() => {
+  if (clips.intro?.src) {
+    setCurrentClip(clips.intro.src);
+  }
+
+  setUserScore(0);
+  setYodaScore(0);
+  setUserMove('');
+  setYodaMove('');
+  setRoundResult('');
+  gameOverRef.current = false;
+
+}, [clips.intro]);
 
   function playClip(src?: string) {
     if (!src) return

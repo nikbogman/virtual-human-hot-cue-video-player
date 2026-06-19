@@ -199,7 +199,7 @@ const [rpsClips, setRpsClips] = useState<RPSClips>({
   // RPS RESOLVER
   // -------------------------
   const resolveRPS = async (slot: keyof RPSClips): Promise<GameClip> => {
-    const b = (m as any)[slot]
+    const b = (m as Record<string, { id?: string; startTime?: number }>)[slot]
     if (!b?.id) return null
 
     await preloadClip(b.id)
@@ -368,18 +368,26 @@ const [rpsClips, setRpsClips] = useState<RPSClips>({
     // is already active — because show_tic_tac_toe arrived before this sync —
     // don't bump gameSession again, or TicTacToe remounts and the Start clip
     // plays a second time.
-    if (
-      modeRef.current !== 'tic-tac-toe' &&
-      localStorage.getItem('monitorMode') === 'tic-tac-toe'
-    ) {
-      modeRef.current = 'tic-tac-toe'
-      setMode('tic-tac-toe')
-      setIsIdleVideoActive(false)
-      setShowOverlay(false)
-      setGameSession((prev) => prev + 1)
-    }
+    const saved = localStorage.getItem('monitorMode');
+
+if (saved === 'tic-tac-toe' && modeRef.current !== 'tic-tac-toe') {
+  modeRef.current = 'tic-tac-toe';
+  setMode('tic-tac-toe');
+  setIsIdleVideoActive(false);
+  setShowOverlay(false);
+  setGameSession((p) => p + 1);
+}
+
+if (saved === 'rock-paper-scissors' && modeRef.current !== 'rock-paper-scissors') {
+  modeRef.current = 'rock-paper-scissors';
+  setMode('rock-paper-scissors');
+  setIsIdleVideoActive(false);
+  setShowOverlay(false);
+  setRpsSession((p) => p + 1);
+}
     channelRef.current?.postMessage({ type: 'request_initial_state' })
   }
+  
 
   return (
     <>

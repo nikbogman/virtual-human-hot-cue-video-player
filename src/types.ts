@@ -26,7 +26,27 @@ export const GENERAL_SLOTS = [
 
 export type GeneralSlot = (typeof GENERAL_SLOTS)[number]['key']
 
-export type BindingSlot = TicTacToeSlot | GeneralSlot
+export type BindingSlot = TicTacToeSlot | GeneralSlot  | RPSSlot
+
+export const RPS_SLOTS = [
+  { key: 'rps_start', label: 'RPS Start Game' },
+
+  { key: 'intro', label: 'Intro' },
+
+  { key: 'rock_win', label: 'Rock Win' },
+  { key: 'rock_lose', label: 'Rock Lose' },
+  { key: 'rock_draw', label: 'Rock Draw' },
+
+  { key: 'paper_win', label: 'Paper Win' },
+  { key: 'paper_lose', label: 'Paper Lose' },
+  { key: 'paper_draw', label: 'Paper Draw' },
+
+  { key: 'scissors_win', label: 'Scissors Win' },
+  { key: 'scissors_lose', label: 'Scissors Lose' },
+  { key: 'scissors_draw', label: 'Scissors Draw' },
+] as const
+
+export type RPSSlot = (typeof RPS_SLOTS)[number]['key']
 
 // slot key -> cue id (null = unlinked)
 export type Bindings = Record<BindingSlot, string | null>
@@ -38,4 +58,15 @@ export const EMPTY_BINDINGS: Bindings = {
   lose: null,
   draw: null,
   idle: null,
+  rps_start: null,
+  intro: null,
+  rock_win: null,
+  rock_lose: null,
+  rock_draw: null,
+  paper_win: null,
+  paper_lose: null,
+  paper_draw: null,
+  scissors_win: null,
+  scissors_lose: null,
+  scissors_draw: null
 }
