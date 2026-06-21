@@ -12,6 +12,7 @@ import { cueCardBase, cueHighlightClass } from "../lib/cueStyle";
 import {
   TIC_TAC_TOE_SLOTS,
   GENERAL_SLOTS,
+  RPS_SLOTS,
   type HotCue,
   type BindingSlot,
 } from "../types";
@@ -63,6 +64,7 @@ export default function HotCuePlayer() {
   useEffect(() => {
     urlsRef.current = urls;
   });
+  
 
   // The explicitly triggered clip; defaults to the first cue (see activeId below).
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export default function HotCuePlayer() {
     activeIdRef.current = activeId;
   });
 
-  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground } =
+  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground, showRockPaperScissors } =
     useSyncBroadcast(
       videoRef,
       () => activeIdRef.current,
@@ -121,12 +123,27 @@ export default function HotCuePlayer() {
     const vid = videoRef.current;
     const cue = pendingCueRef.current;
     if (!vid || !cue) return;
-    vid.currentTime = cue.startTime;
-    void vid.play();
-    // A cue launches the game when it's the one bound to the "start" slot.
-    if (cue.id === bindingsRef.current.start) showTicTacToe(cue.startTime, cue.id);
-    else if (returnsToWelcome(cue)) showWelcome(cue.startTime, cue.id);
-    else setTicTacToeBackground(cue.startTime, cue.id);
+ vid.currentTime = cue.startTime;
+void vid.play();
+
+const b = bindingsRef.current;
+
+// RPS 
+if (cue.id === b.rps_start) {
+  showRockPaperScissors(cue.startTime, cue.id);
+}
+
+// TicTacToe
+else if (cue.id === b.start) {
+  showTicTacToe(cue.startTime, cue.id);
+}
+
+// fallback rules
+else if (returnsToWelcome(cue)) {
+  showWelcome(cue.startTime, cue.id);
+} else {
+  setTicTacToeBackground(cue.startTime, cue.id);
+}
     pendingCueRef.current = null;
   }
 
@@ -189,6 +206,21 @@ export default function HotCuePlayer() {
           lose: resolveSlot(cues, bindings.lose),
           draw: resolveSlot(cues, bindings.draw),
           idle: resolveSlot(cues, bindings.idle),
+         rps_start: resolveSlot(cues, bindings.rps_start),
+
+  intro: resolveSlot(cues, bindings.intro),
+
+  rock_win: resolveSlot(cues, bindings.rock_win),
+  rock_lose: resolveSlot(cues, bindings.rock_lose),
+  rock_draw: resolveSlot(cues, bindings.rock_draw),
+
+  paper_win: resolveSlot(cues, bindings.paper_win),
+  paper_lose: resolveSlot(cues, bindings.paper_lose),
+  paper_draw: resolveSlot(cues, bindings.paper_draw),
+
+  scissors_win: resolveSlot(cues, bindings.scissors_win),
+  scissors_lose: resolveSlot(cues, bindings.scissors_lose),
+  scissors_draw: resolveSlot(cues, bindings.scissors_draw),
         },
       });
     };
@@ -417,6 +449,7 @@ export default function HotCuePlayer() {
               <Monitor size={14} />
               Open monitor
             </button>
+            
             <button
               className={btnCls}
               onClick={(e) => {
@@ -463,6 +496,14 @@ export default function HotCuePlayer() {
           <span className="text-[#888] font-medium">Tic-Tac-Toe clips</span>
           {TIC_TAC_TOE_SLOTS.map(renderSlotSelect)}
         </div>
+        {/* Rock Paper Scissors  clips binder */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
+  <span className="text-[#888] font-medium">
+    Rock Paper Scissors clips
+  </span>
+
+  {RPS_SLOTS.map(renderSlotSelect)}
+</div>
 
         {/* Body: list row or node graph */}
         {view === "list" ? (
@@ -534,5 +575,6 @@ export default function HotCuePlayer() {
         )}
       </div>
     </>
+    
   );
 }
