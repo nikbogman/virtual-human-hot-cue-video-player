@@ -1,0 +1,26 @@
+when index clicks on idle
+
+index send message broadcast
+
+monitor listen broadcast
+
+monitor -> video sync to idle
+        -> overlay
+
+on monitor overlay touch -> monitor send event {} -> broadcast
+
+index listen broadcast -> play video
+
+
+{
+    init port {
+        -- initial state sync
+    }
+
+    on 50 interval
+
+        video sync
+     {
+
+    }
+}

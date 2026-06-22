@@ -15,7 +15,7 @@ export function detectGesture(landmarks: any[]): Move {
   }
 
   if (extended === 0) return "rock"
-  if (extended === 2 || extended === 3) return "scissors"
+  if (extended === 2) return "scissors"
   if (extended >= 4) return "paper"
 
   return null

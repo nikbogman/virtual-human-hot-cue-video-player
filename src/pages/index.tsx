@@ -1,55 +1,59 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import Head from "next/head";
 import dynamic from "next/dynamic";
 import CueCardEdit from "../components/CueCardEdit";
 import CueCardFace from "../components/CueCardFace";
 import { useHotCues } from "../hooks/useHotCues";
 import { useCueGraph } from "../hooks/useCueGraph";
-import { useGameBindings } from "../hooks/useGameBindings";
-import { useSyncBroadcast } from "../hooks/useSyncBroadcast";
-import { getVideo } from "../lib/videoDB";
+import { useBroadcastChannel } from "../hooks/useBroadcastChannel";
+import { useCueBlobUrls } from "../hooks/useCueBlobUrls";
+import { storeVideo, deleteVideo, clearAllVideos } from "../lib/videoDB";
 import { cueCardBase, cueHighlightClass } from "../lib/cueStyle";
 import {
-  TIC_TAC_TOE_SLOTS,
-  GENERAL_SLOTS,
-  RPS_SLOTS,
+  ALL_BINDING_SLOTS,
+  SLOT_GROUPS,
+  type GameSlot,
   type HotCue,
-  type BindingSlot,
+  type GameBindings,
 } from "../types";
-import {
-  Monitor,
-  Upload,
-  Download,
-  Plus,
-  Trash2,
-  List,
-  Network,
-} from "lucide-react";
+import { Monitor, Upload, Download, Plus, Trash2, List, Network } from "lucide-react";
 
-// React Flow measures the DOM, so the canvas is client-only (Pages Router).
-const CueGraph = dynamic(() => import("../components/CueGraph"), {
-  ssr: false,
-});
+const CueGraph = dynamic(() => import("../components/CueGraph"), { ssr: false });
 
 const btnCls =
   "px-3.5 border border-[#3a3a3a] bg-[#242424] text-[#ddd] rounded cursor-pointer " +
   "text-[13px] whitespace-nowrap inline-flex items-center gap-1.5 leading-none h-8 " +
   "hover:bg-[#2e2e2e] hover:border-[#555] hover:text-white";
 
-function getCueByTitle(cues: HotCue[], title: string): HotCue | undefined {
-  return cues.find((c) => c.title === title);
+
+function SlotDisplay({ slot, cue }: { slot: GameSlot; cue: HotCue | undefined }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-[#888]">{slot.label}</span>
+      {cue ? (
+        <>
+          <span className="text-[#ddd]">{cue.title || cue.fileName}</span>
+          {cue.key && (
+            <kbd className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded border border-[#3a3a3a] bg-[#2a2a2a] text-[#ccc] font-mono text-[11px] leading-none">
+              {cue.key.toUpperCase()}
+            </kbd>
+          )}
+        </>
+      ) : (
+        <span className="text-[#555]">— none —</span>
+      )}
+    </span>
+  )
 }
 
-function returnsToWelcome(cue: HotCue) {
+function isWelcomeCue(cue: HotCue) {
   return /\b(welcome|start|home|reset)\b/i.test(cue.title);
 }
 
-// Resolve a slot's bound cue to the payload the monitor needs to play it.
-function resolveSlot(cues: HotCue[], cueId: string | null) {
-  if (!cueId) return null;
-  const cue = cues.find((c) => c.id === cueId);
-  return cue ? { id: cue.id, startTime: cue.startTime } : null;
+function nameWithoutExt(name: string) {
+  return name.replace(/\.[^./\\]+$/, '');
 }
+
 
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -57,266 +61,170 @@ export default function HotCuePlayer() {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const [view, setView] = useState<"list" | "graph">("list");
-
-  // One blob URL per clip id, kept in sync with the cue list.
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const urlsRef = useRef(urls);
-  useEffect(() => {
-    urlsRef.current = urls;
-  });
-  
-
-  // The explicitly triggered clip; defaults to the first cue (see activeId below).
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const activeIdRef = useRef<string | null>(null);
-
-  // The cue that was last triggered — used to light up the playing card and to
-  // surface its connected "next" cues. Stays set until another cue is pressed.
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Cue waiting to be seeked + played once its clip has loaded.
-  const pendingCueRef = useRef<HotCue | null>(null);
-
   const {
-    cues,
-    editingIndex,
-    setEditingIndex,
-    closeEdit,
-    updateCue,
-    addClips,
-    deleteCue,
-    clearCues,
-    exportCues,
-    importCues,
+    cues, editingIndex, setEditingIndex, closeEdit,
+    updateCue, addCues, deleteCue, clearCues, exportCues, importCues,
   } = useHotCues(handleCuePress);
 
   const graph = useCueGraph();
-  const { bindings, setBinding, pruneBindings, replaceBindings } =
-    useGameBindings();
 
-  // Latest bindings for use inside imperative callbacks (cue press routing).
-  const bindingsRef = useRef(bindings);
+  const urls = useCueBlobUrls(cues);
+  const bindings = useMemo((): GameBindings =>
+    Object.fromEntries(ALL_BINDING_SLOTS.map((s) => [s.key, cues.find((c) => c.title === s.key)?.id ?? null])) as GameBindings,
+    [cues]);
+
+  const playing = useMemo(() => {
+    const cue = cues.find((c) => c.id === selectedId) ?? cues[0];
+    const id = cue?.id ?? null;
+    return { id, src: id ? urls[id] : undefined };
+  }, [selectedId, cues, urls]);
+
+  const isIdle = playing.id === cues.find((c) => c.title === "idle")?.id;
+
+  const cueByTitle = useMemo(() => new Map(cues.map((c) => [c.title, c])), [cues]);
+
+  const videoIdRef = useRef(playing.id)
+  const isIdleRef = useRef(isIdle)
+  const cuesRef = useRef(cues)
+  videoIdRef.current = playing.id
+  isIdleRef.current = isIdle
+  cuesRef.current = cues
+
+  const { post, onMessage } = useBroadcastChannel()
+
+  onMessage('request_initial_state', () => {
+    const vid = videoRef.current
+    if (!vid) return
+    post({
+      type: 'send_initial_state',
+      videoId: videoIdRef.current,
+      currentTime: vid.currentTime,
+      isPlaying: !vid.paused,
+      isIdle: isIdleRef.current,
+    })
+    resendState()
+  })
+
   useEffect(() => {
-    bindingsRef.current = bindings;
-  });
+    const vid = videoRef.current
+    if (!vid) return
 
-  // Effective active clip: the explicitly selected one if it still exists, else
-  // the first cue so the player shows a frame instead of black. Derived, not effect-synced.
-  const activeId =
-    selectedId && cues.some((c) => c.id === selectedId)
-      ? selectedId
-      : (cues[0]?.id ?? null);
+    const postPlayback = (type: 'play' | 'pause' | 'seek') =>
+      post({ type, videoId: videoIdRef.current, currentTime: vid.currentTime, isIdle: isIdleRef.current })
 
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  });
+    const onPlay = () => postPlayback('play')
+    const onPause = () => postPlayback('pause')
+    const onSeeked = () => postPlayback('seek')
 
-  const { openMonitor, showTicTacToe, showWelcome, setTicTacToeBackground, showRockPaperScissors } =
-    useSyncBroadcast(
-      videoRef,
-      () => activeIdRef.current,
-      () => activeIdRef.current === getCueByTitle(cues, "idle")?.id,
-    );
+    vid.addEventListener('play', onPlay)
+    vid.addEventListener('pause', onPause)
+    vid.addEventListener('seeked', onSeeked)
 
-  function applyPendingCue() {
+    return () => {
+      vid.removeEventListener('play', onPlay)
+      vid.removeEventListener('pause', onPause)
+      vid.removeEventListener('seeked', onSeeked)
+    }
+  }, [])
+
+  const resendState = useRef(() => {
+    const latestCues = cuesRef.current
+    post({
+      type: 'titles_map',
+      mapping: {
+        poked: latestCues.find((c) => c.title === 'poked')?.id ?? null,
+        touched_screen: latestCues.find((c) => c.title === 'touched_screen')?.id ?? null,
+      },
+    })
+    post({
+      type: 'game_bindings',
+      mapping: Object.fromEntries(
+        ALL_BINDING_SLOTS.map((s) => {
+          const cue = latestCues.find((c) => c.title === s.key)
+          return [s.key, cue ? { id: cue.id, startTime: cue.startTime } : null]
+        })
+      ),
+    })
+  }).current
+
+  useEffect(() => { resendState() }, [cues])
+
+  const openMonitor = useCallback(() => {
+    window.open('/monitor', '_blank', 'width=960,height=600')
+  }, [])
+
+  const showTicTacToe = useCallback((startTime: number, videoId: string | null) => {
+    post({ type: 'show_tic_tac_toe', videoId, startTime })
+  }, [])
+
+  const showWelcome = useCallback((startTime: number, videoId: string | null) => {
+    post({ type: 'show_welcome', videoId, startTime })
+  }, [])
+
+  const showRockPaperScissors = useCallback((startTime: number, videoId: string | null) => {
+    post({ type: 'show_rock_paper_scissors', videoId, startTime })
+  }, [])
+
+  function applyActiveCue() {
     const vid = videoRef.current;
-    const cue = pendingCueRef.current;
+    const cue = cues.find((c) => c.id === playing.id);
     if (!vid || !cue) return;
- vid.currentTime = cue.startTime;
-void vid.play();
-
-const b = bindingsRef.current;
-
-// RPS 
-if (cue.id === b.rps_start) {
-  showRockPaperScissors(cue.startTime, cue.id);
-}
-
-// TicTacToe
-else if (cue.id === b.start) {
-  showTicTacToe(cue.startTime, cue.id);
-}
-
-// fallback rules
-else if (returnsToWelcome(cue)) {
-  showWelcome(cue.startTime, cue.id);
-} else {
-  setTicTacToeBackground(cue.startTime, cue.id);
-}
-    pendingCueRef.current = null;
+    vid.currentTime = cue.startTime;
+    void vid.play();
+    if (cue.id === bindings.rps_start) {
+      showRockPaperScissors(cue.startTime, cue.id);
+    } else if (cue.id === bindings["tictactoe-start"]) {
+      showTicTacToe(cue.startTime, cue.id);
+    } else if (isWelcomeCue(cue)) {
+      showWelcome(cue.startTime, cue.id);
+    }
   }
 
   function handleCuePress(cue: HotCue) {
-    setPlayingId(cue.id);
-    pendingCueRef.current = cue;
-    if (activeIdRef.current === cue.id) {
-      applyPendingCue(); // clip already loaded — seek + play now
+    if (playing.id === cue.id) {
+      applyActiveCue();
     } else {
-      setSelectedId(cue.id); // switch clips; onLoadedMetadata will apply
+      setSelectedId(cue.id);
     }
   }
 
-  // Delete / clear must also prune the graph layout (positions + links).
+
   function handleDeleteCue(i: number) {
     const id = cues[i]?.id;
+    if (id) void deleteVideo(id);
     deleteCue(i);
-    if (id) {
-      graph.removeNode(id);
-      pruneBindings(new Set(cues.filter((c) => c.id !== id).map((c) => c.id)));
-    }
+    if (id) graph.removeNode(id);
   }
 
   function handleClearCues() {
+    void clearAllVideos();
     clearCues();
     graph.clear();
-    pruneBindings(new Set());
   }
 
-  // Targets of the playing cue's outgoing links — highlighted as "up next".
+
+  async function importClips(files: FileList | File[]) {
+    const videos = Array.from(files).filter((f) => f.type.startsWith('video/'));
+    if (videos.length === 0) return;
+    const newCues = [];
+    for (const file of videos) {
+      const id = crypto.randomUUID();
+      await storeVideo(id, file);
+      newCues.push({ id, key: '', startTime: 0, title: nameWithoutExt(file.name), label: '', fileName: file.name });
+    }
+    addCues(newCues);
+  }
+
   const nextIds = useMemo(
-    () =>
-      new Set(
-        graph.links.filter((l) => l.source === playingId).map((l) => l.target),
-      ),
-    [graph.links, playingId],
+    () => new Set(graph.links.filter((l) => l.source === selectedId).map((l) => l.target)),
+    [graph.links, selectedId],
   );
 
-  useEffect(() => {
-    const channel = new BroadcastChannel("video_sync");
-
-    const sendTitlesMap = () => {
-      channel.postMessage({
-        type: "titles_map",
-        mapping: {
-          poked: cues.find((c) => c.title === "poked")?.id || null,
-          touched_screen:
-            cues.find((c) => c.title === "touched_screen")?.id || null,
-        },
-      });
-    };
-
-    const sendGameBindings = () => {
-      channel.postMessage({
-        type: "game_bindings",
-        mapping: {
-          start: resolveSlot(cues, bindings.start),
-          place: resolveSlot(cues, bindings.place),
-          win: resolveSlot(cues, bindings.win),
-          lose: resolveSlot(cues, bindings.lose),
-          draw: resolveSlot(cues, bindings.draw),
-          idle: resolveSlot(cues, bindings.idle),
-         rps_start: resolveSlot(cues, bindings.rps_start),
-
-  intro: resolveSlot(cues, bindings.intro),
-
-  rock_win: resolveSlot(cues, bindings.rock_win),
-  rock_lose: resolveSlot(cues, bindings.rock_lose),
-  rock_draw: resolveSlot(cues, bindings.rock_draw),
-
-  paper_win: resolveSlot(cues, bindings.paper_win),
-  paper_lose: resolveSlot(cues, bindings.paper_lose),
-  paper_draw: resolveSlot(cues, bindings.paper_draw),
-
-  scissors_win: resolveSlot(cues, bindings.scissors_win),
-  scissors_lose: resolveSlot(cues, bindings.scissors_lose),
-  scissors_draw: resolveSlot(cues, bindings.scissors_draw),
-        },
-      });
-    };
-
-    sendTitlesMap();
-    sendGameBindings();
-
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === "request_initial_state") {
-        setTimeout(() => {
-          sendTitlesMap();
-          sendGameBindings();
-        }, 50);
-      }
-    };
-
-    channel.addEventListener("message", handleMessage);
-    return () => {
-      channel.removeEventListener("message", handleMessage);
-      channel.close();
-    };
-  }, [cues, bindings]);
-
-  // Load a blob URL for every cue's clip; revoke URLs for removed cues.
-  useEffect(() => {
-    let cancelled = false;
-    const current = urlsRef.current;
-    const ids = new Set(cues.map((c) => c.id));
-    const stale = Object.keys(current).filter((id) => !ids.has(id));
-    stale.forEach((id) => URL.revokeObjectURL(current[id]));
-    const missing = cues.filter((c) => !current[c.id]);
-
-    void Promise.all(
-      missing.map(async (c) => {
-        const file = await getVideo(c.id);
-        return file ? ([c.id, URL.createObjectURL(file)] as const) : null;
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      setUrls((prev) => {
-        const next = { ...prev };
-        stale.forEach((id) => delete next[id]);
-        for (const e of entries) if (e) next[e[0]] = e[1];
-        return next;
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cues]);
-
-  // Revoke all blob URLs on unmount.
-  useEffect(
-    () => () => {
-      Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u));
-    },
-    [],
-  );
-
-  const activeSrc = activeId ? urls[activeId] : undefined;
-
-  // One labelled dropdown linking a clip to a slot, with the bound clip's
-  // keybind shown as a tag; shared by the binding bars.
-  const renderSlotSelect = (slot: { key: BindingSlot; label: string }) => {
-    const boundKey = cues.find((c) => c.id === bindings[slot.key])?.key;
-    return (
-      <label key={slot.key} className="flex items-center gap-1.5">
-        <span className="text-[#aaa]">{slot.label}</span>
-        <select
-          className="bg-[#242424] border border-[#3a3a3a] rounded px-2 h-7 text-[#ddd] max-w-[160px] cursor-pointer hover:border-[#555] focus:outline-none focus:border-[#666]"
-          value={bindings[slot.key] ?? ""}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => setBinding(slot.key, e.target.value || null)}
-        >
-          <option value="">— none —</option>
-          {cues.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title || c.fileName}
-            </option>
-          ))}
-        </select>
-        {boundKey && (
-          <kbd className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded border border-[#3a3a3a] bg-[#2a2a2a] text-[#ccc] font-mono text-[11px] leading-none">
-            {boundKey.toUpperCase()}
-          </kbd>
-        )}
-      </label>
-    );
-  };
-
-  const toggleBtn = (active: boolean) =>
-    `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${
-      active
-        ? "bg-[#2e2e2e] text-white"
-        : "bg-[#1a1a1a] text-[#888] hover:text-[#ccc]"
+  const toggleBtn = (isActive: boolean) =>
+    `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${isActive ? "bg-[#2e2e2e] text-white" : "bg-[#1a1a1a] text-[#888] hover:text-[#ccc]"
     }`;
 
   return (
@@ -328,7 +236,6 @@ else if (returnsToWelcome(cue)) {
         className="h-screen flex flex-col bg-[#111] text-[#eee] overflow-hidden font-sans pt-20 px-10"
         onClick={closeEdit}
       >
-        {/* Hidden inputs (available in both views) */}
         <input
           id="file-input"
           ref={fileInputRef}
@@ -337,7 +244,7 @@ else if (returnsToWelcome(cue)) {
           multiple
           className="hidden"
           onChange={(e) => {
-            if (e.target.files?.length) void addClips(e.target.files);
+            if (e.target.files?.length) void importClips(e.target.files);
             e.target.value = "";
           }}
         />
@@ -348,35 +255,23 @@ else if (returnsToWelcome(cue)) {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file)
-              importCues(file, (data) => {
-                if (data.gameBindings) replaceBindings(data.gameBindings);
-              });
+            if (file) importCues(file);
             e.target.value = "";
           }}
         />
 
-        {/* Player */}
         <div className="relative bg-black overflow-hidden w-1/2 h-1/2 mx-auto flex-shrink-0">
           {cues.length === 0 && (
             <div
-              className={`absolute inset-0 flex items-center justify-center border-2 border-dashed cursor-pointer transition-colors ${
-                isDragOver ? "border-[#aaa] bg-white/[0.03]" : "border-[#333]"
-              }`}
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
+              className={`absolute inset-0 flex items-center justify-center border-2 border-dashed cursor-pointer transition-colors ${isDragOver ? "border-[#aaa] bg-white/[0.03]" : "border-[#333]"
+                }`}
+              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
               onDragLeave={() => setIsDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setIsDragOver(false);
-                if (e.dataTransfer.files.length)
-                  void addClips(e.dataTransfer.files);
+                if (e.dataTransfer.files.length) void importClips(e.dataTransfer.files);
               }}
             >
               <div className="flex flex-col items-center gap-3 text-[#666] text-sm pointer-events-none">
@@ -394,118 +289,64 @@ else if (returnsToWelcome(cue)) {
           )}
           <video
             ref={videoRef}
-            className={`w-full h-full object-contain ${activeSrc ? "block" : "hidden"}`}
+            className={`w-full h-full object-contain ${playing.src ? "block" : "hidden"}`}
             controls
-            src={activeSrc}
-            onLoadedMetadata={applyPendingCue}
+            src={playing.src}
+            onLoadedMetadata={applyActiveCue}
           />
         </div>
 
-        {/* Controls bar */}
         <div className="flex items-center justify-between mt-6 mb-3 px-3 py-2 bg-[#1a1a1a] rounded min-h-10 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded border border-[#3a3a3a] overflow-hidden">
-              <button
-                className={toggleBtn(view === "list")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setView("list");
-                }}
-              >
-                <List size={14} />
-                List
+              <button className={toggleBtn(view === "list")} onClick={(e) => { e.stopPropagation(); setView("list") }}>
+                <List size={14} />List
               </button>
-              <button
-                className={toggleBtn(view === "graph")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setView("graph");
-                }}
-              >
-                <Network size={14} />
-                Graph
+              <button className={toggleBtn(view === "graph")} onClick={(e) => { e.stopPropagation(); setView("graph") }}>
+                <Network size={14} />Graph
               </button>
             </div>
-            <button
-              className={btnCls}
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-            >
-              <Plus size={14} />
-              Add clips
+            <button className={btnCls} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}>
+              <Plus size={14} />Add clips
             </button>
           </div>
           <div className="flex items-center gap-2">
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
-              disabled={!activeSrc}
-              onClick={(e) => {
-                e.stopPropagation();
-                openMonitor();
-              }}
+              disabled={!playing.src}
+              onClick={(e) => { e.stopPropagation(); openMonitor() }}
             >
-              <Monitor size={14} />
-              Open monitor
+              <Monitor size={14} />Open monitor
             </button>
-            
-            <button
-              className={btnCls}
-              onClick={(e) => {
-                e.stopPropagation();
-                importInputRef.current?.click();
-              }}
-            >
-              <Upload size={14} />
-              Import
+            <button className={btnCls} onClick={(e) => { e.stopPropagation(); importInputRef.current?.click() }}>
+              <Upload size={14} />Import
             </button>
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
               disabled={cues.length === 0}
-              onClick={(e) => {
-                e.stopPropagation();
-                exportCues({ gameBindings: bindings });
-              }}
+              onClick={(e) => { e.stopPropagation(); exportCues() }}
             >
-              <Download size={14} />
-              Export
+              <Download size={14} />Export
             </button>
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#c44] hover:text-[#c44]`}
               disabled={cues.length === 0}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClearCues();
-              }}
+              onClick={(e) => { e.stopPropagation(); handleClearCues() }}
             >
-              <Trash2 size={14} />
-              Clear all
+              <Trash2 size={14} />Clear all
             </button>
           </div>
         </div>
 
-        {/* General clips: cross-game slots (e.g. Idle), reusable beyond Tic-Tac-Toe */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-2 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
-          <span className="text-[#888] font-medium">General clips</span>
-          {GENERAL_SLOTS.map(renderSlotSelect)}
-        </div>
+        {SLOT_GROUPS.map((group) => (
+          <div key={group.label} className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
+            <span className="text-[#888] font-medium">{group.label}</span>
+            {group.slots.map((slot) => (
+              <SlotDisplay key={slot.key} slot={slot} cue={cueByTitle.get(slot.key)} />
+            ))}
+          </div>
+        ))}
 
-        {/* Tic-Tac-Toe clip bindings: link an uploaded clip to each game slot */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
-          <span className="text-[#888] font-medium">Tic-Tac-Toe clips</span>
-          {TIC_TAC_TOE_SLOTS.map(renderSlotSelect)}
-        </div>
-        {/* Rock Paper Scissors  clips binder */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
-  <span className="text-[#888] font-medium">
-    Rock Paper Scissors clips
-  </span>
-
-  {RPS_SLOTS.map(renderSlotSelect)}
-</div>
-
-        {/* Body: list row or node graph */}
         {view === "list" ? (
           <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 overflow-x-auto">
             {cues.map((cue, i) =>
@@ -522,17 +363,10 @@ else if (returnsToWelcome(cue)) {
               ) : (
                 <div
                   key={cue.id}
-                  className={`${cueCardBase} flex-shrink-0 ${cueHighlightClass(playingId === cue.id, nextIds.has(cue.id))}`}
+                  className={`${cueCardBase} flex-shrink-0 ${cueHighlightClass(selectedId === cue.id, nextIds.has(cue.id))}`}
                   title={cue.fileName}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCuePress(cue);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setEditingIndex(i);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleCuePress(cue) }}
+                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setEditingIndex(i) }}
                 >
                   <CueCardFace
                     cue={cue}
@@ -545,10 +379,7 @@ else if (returnsToWelcome(cue)) {
             <button
               className="w-16 h-28 bg-transparent border border-dashed border-[#3a3a3a] rounded text-[#555] cursor-pointer text-xl leading-none flex items-center justify-center flex-shrink-0 hover:border-[#666] hover:text-[#aaa]"
               title="Upload clip(s)"
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
+              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
             >
               <Plus size={20} />
             </button>
@@ -559,7 +390,7 @@ else if (returnsToWelcome(cue)) {
               cues={cues}
               positions={graph.positions}
               links={graph.links}
-              playingId={playingId}
+              playingId={selectedId}
               nextIds={nextIds}
               editingIndex={editingIndex}
               onPlay={handleCuePress}
@@ -575,6 +406,5 @@ else if (returnsToWelcome(cue)) {
         )}
       </div>
     </>
-    
   );
 }

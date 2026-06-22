@@ -1,10 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import type { HotCue } from '../types'
-import { storeVideo, deleteVideo, clearAllVideos } from '../lib/videoDB'
-
-function nameWithoutExt(name: string): string {
-  return name.replace(/\.[^./\\]+$/, '')
-}
 
 export function useHotCues(onCuePress: (cue: HotCue) => void) {
   const [cues, setCues] = useState<HotCue[]>([])
@@ -15,27 +10,16 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
   const onCuePressRef = useRef(onCuePress)
   const cuesLoadedRef = useRef(false)
 
-  useEffect(() => {
-    cuesRef.current = cues
-  }, [cues])
+  cuesRef.current = cues
+  editingIndexRef.current = editingIndex
+  onCuePressRef.current = onCuePress
 
   useEffect(() => {
-    editingIndexRef.current = editingIndex
-  }, [editingIndex])
-
-  useEffect(() => {
-    onCuePressRef.current = onCuePress
-  }, [onCuePress])
-
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
-        if (Array.isArray(saved)) setCues(saved)
-      } catch {}
-      cuesLoadedRef.current = true
-    }, 0)
-    return () => window.clearTimeout(id)
+    try {
+      const saved = JSON.parse(localStorage.getItem('hotCues') ?? '[]')
+      if (Array.isArray(saved)) setCues(saved)
+    } catch { }
+    cuesLoadedRef.current = true
   }, [])
 
   useEffect(() => {
@@ -43,22 +27,23 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     localStorage.setItem('hotCues', JSON.stringify(cues))
   }, [cues])
 
-  useEffect(() => {
-    const handle = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  function handleKeyboardEvent(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement).tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
-      if (e.key === 'Escape') {
-        if (editingIndexRef.current !== null) setEditingIndex(null)
-        return
-      }
-
-      const idx = cuesRef.current.findIndex((c) => c.key === e.key.toLowerCase())
-      if (idx === -1) return
-      onCuePressRef.current(cuesRef.current[idx])
+    if (e.key === 'Escape') {
+      if (editingIndexRef.current !== null) setEditingIndex(null)
+      return
     }
-    document.addEventListener('keydown', handle)
-    return () => document.removeEventListener('keydown', handle)
+
+    const idx = cuesRef.current.findIndex((c) => c.key === e.key.toLowerCase())
+    if (idx === -1) return
+    onCuePressRef.current(cuesRef.current[idx])
+  }
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyboardEvent)
+    return () => document.removeEventListener('keydown', handleKeyboardEvent)
   }, [])
 
   function closeEdit() {
@@ -73,40 +58,22 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
     })
   }
 
-  // Each uploaded video becomes its own cue (1:1). The file is persisted to
-  // IndexedDB under the cue id so the monitor window can read it independently.
-  async function addClips(files: FileList | File[]) {
-    const videos = Array.from(files).filter((f) => f.type.startsWith('video/'))
-    if (videos.length === 0) return
-
-    const newCues: HotCue[] = []
-    for (const file of videos) {
-      const id = crypto.randomUUID()
-      await storeVideo(id, file)
-      newCues.push({ id, key: '', startTime: 0, title: nameWithoutExt(file.name), label: '', fileName: file.name })
-    }
-
+  function addCues(newCues: HotCue[]) {
     const firstNewIndex = cuesRef.current.length
     setCues([...cuesRef.current, ...newCues])
-    setEditingIndex(firstNewIndex) // open the first new card to assign a key
+    setEditingIndex(firstNewIndex)
   }
 
   function deleteCue(index: number) {
-    const cue = cuesRef.current[index]
-    if (cue) void deleteVideo(cue.id)
     setCues((prev) => prev.filter((_, i) => i !== index))
     setEditingIndex(null)
   }
 
   function clearCues() {
-    void clearAllVideos()
     setCues([])
     setEditingIndex(null)
   }
 
-  // `extra` (e.g. game bindings) is folded into the JSON so a saved setup
-  // restores its clip links too. Backward compatible: import still accepts a
-  // bare cue array produced by older exports.
   function exportCues(extra?: Record<string, unknown>) {
     const payload = extra ? { cues: cuesRef.current, ...extra } : cuesRef.current
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -138,10 +105,10 @@ export function useHotCues(onCuePress: (cue: HotCue) => void) {
         setCues(valid)
         setEditingIndex(null)
         if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') onExtra?.(parsed)
-      } catch {}
+      } catch { }
     }
     reader.readAsText(file)
   }
 
-  return { cues, editingIndex, setEditingIndex, closeEdit, updateCue, addClips, deleteCue, clearCues, exportCues, importCues }
+  return { cues, editingIndex, setEditingIndex, closeEdit, updateCue, addCues, deleteCue, clearCues, exportCues, importCues }
 }
