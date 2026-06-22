@@ -1,32 +1,43 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Head from "next/head";
 import dynamic from "next/dynamic";
 import CueCardEdit from "../components/CueCardEdit";
 import CueCardFace from "../components/CueCardFace";
 import { useHotCues } from "../hooks/useHotCues";
 import { useCueGraph } from "../hooks/useCueGraph";
-import { useBroadcastChannel } from "../hooks/useBroadcastChannel";
+import { useChildPageController } from "../hooks/controller/useChildPageController";
+import { useInterval } from "../hooks/useInterval";
+import type { MonitorMode } from "../hooks/controller/types";
 import { useCueBlobUrls } from "../hooks/useCueBlobUrls";
 import { storeVideo, deleteVideo, clearAllVideos } from "../lib/videoDB";
 import { cueCardBase, cueHighlightClass } from "../lib/cueStyle";
+import { SLOT_GROUPS, type GameSlot, type HotCue } from "../types";
 import {
-  ALL_BINDING_SLOTS,
-  SLOT_GROUPS,
-  type GameSlot,
-  type HotCue,
-  type GameBindings,
-} from "../types";
-import { Monitor, Upload, Download, Plus, Trash2, List, Network } from "lucide-react";
+  Monitor,
+  Upload,
+  Download,
+  Plus,
+  Trash2,
+  List,
+  Network,
+} from "lucide-react";
 
-const CueGraph = dynamic(() => import("../components/CueGraph"), { ssr: false });
+const CueGraph = dynamic(() => import("../components/CueGraph"), {
+  ssr: false,
+});
 
 const btnCls =
   "px-3.5 border border-[#3a3a3a] bg-[#242424] text-[#ddd] rounded cursor-pointer " +
   "text-[13px] whitespace-nowrap inline-flex items-center gap-1.5 leading-none h-8 " +
   "hover:bg-[#2e2e2e] hover:border-[#555] hover:text-white";
 
-
-function SlotDisplay({ slot, cue }: { slot: GameSlot; cue: HotCue | undefined }) {
+function SlotDisplay({
+  slot,
+  cue,
+}: {
+  slot: GameSlot;
+  cue: HotCue | undefined;
+}) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="text-[#888]">{slot.label}</span>
@@ -43,17 +54,19 @@ function SlotDisplay({ slot, cue }: { slot: GameSlot; cue: HotCue | undefined })
         <span className="text-[#555]">— none —</span>
       )}
     </span>
-  )
-}
-
-function isWelcomeCue(cue: HotCue) {
-  return /\b(welcome|start|home|reset)\b/i.test(cue.title);
+  );
 }
 
 function nameWithoutExt(name: string) {
-  return name.replace(/\.[^./\\]+$/, '');
+  return name.replace(/\.[^./\\]+$/, "");
 }
 
+function getModeFromTitle(title: string): MonitorMode {
+  if (title === "idle" || title.startsWith("poke")) return "idle";
+  if (title.startsWith("tictactoe")) return "tic-tac-toe";
+  if (title.startsWith("rps")) return "rock-paper-scissors";
+  return "video";
+}
 
 export default function HotCuePlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -65,108 +78,128 @@ export default function HotCuePlayer() {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const {
-    cues, editingIndex, setEditingIndex, closeEdit,
-    updateCue, addCues, deleteCue, clearCues, exportCues, importCues,
+    cues,
+    editingIndex,
+    setEditingIndex,
+    closeEdit,
+    updateCue,
+    addCues,
+    deleteCue,
+    clearCues,
+    exportCues,
+    importCues,
   } = useHotCues(handleCuePress);
 
   const graph = useCueGraph();
 
   const urls = useCueBlobUrls(cues);
-  const bindings = useMemo((): GameBindings =>
-    Object.fromEntries(ALL_BINDING_SLOTS.map((s) => [s.key, cues.find((c) => c.title === s.key)?.id ?? null])) as GameBindings,
-    [cues]);
-
   const playing = useMemo(() => {
     const cue = cues.find((c) => c.id === selectedId) ?? cues[0];
     const id = cue?.id ?? null;
     return { id, src: id ? urls[id] : undefined };
   }, [selectedId, cues, urls]);
 
-  const isIdle = playing.id === cues.find((c) => c.title === "idle")?.id;
+  const cueByTitle = useMemo(
+    () => new Map(cues.map((c) => [c.title, c])),
+    [cues],
+  );
 
-  const cueByTitle = useMemo(() => new Map(cues.map((c) => [c.title, c])), [cues]);
+  const videoIdRef = useRef(playing.id);
+  const modeRef = useRef<MonitorMode>("video");
+  videoIdRef.current = playing.id;
 
-  const videoIdRef = useRef(playing.id)
-  const isIdleRef = useRef(isIdle)
-  const cuesRef = useRef(cues)
-  videoIdRef.current = playing.id
-  isIdleRef.current = isIdle
-  cuesRef.current = cues
+  const activeCue = cues.find((c) => c.id === playing.id);
+  modeRef.current = activeCue ? getModeFromTitle(activeCue.title) : "video";
 
-  const { post, onMessage } = useBroadcastChannel()
+  const { openChildPage, sendCommandToChild, onConnected, onMessage } =
+    useChildPageController();
 
-  onMessage('request_initial_state', () => {
-    const vid = videoRef.current
-    if (!vid) return
-    post({
-      type: 'send_initial_state',
-      videoId: videoIdRef.current,
-      currentTime: vid.currentTime,
-      isPlaying: !vid.paused,
-      isIdle: isIdleRef.current,
-    })
-    resendState()
-  })
+  const syncReactionCue = (title: string) => {
+    const cue = cues.find((c) => c.title === title);
+    if (!cue) return;
+    const vid = videoRef.current;
+    setSelectedId(cue.id);
+    if (vid) {
+      vid.currentTime = cue.startTime;
+      void vid.play();
+    }
+
+    sendCommandToChild({ type: "CHANGE_MODE", mode: "idle" });
+    sendCommandToChild({
+      type: "SYNC_VIDEO",
+      event: "play",
+      mode: "idle",
+      payload: { id: cue.id, currentTime: cue.startTime, sentAt: Date.now() },
+    });
+  };
+
+  onMessage("YODA_POKED", () => syncReactionCue("poke-yoda"));
+  onMessage("BACKGROUND_POKED", () => syncReactionCue("poke-bg"));
+
+  onConnected(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    sendCommandToChild({
+      type: "SYNC_VIDEO",
+      event: vid.paused ? "pause" : "play",
+      mode: modeRef.current,
+      payload: {
+        id: videoIdRef.current ?? "",
+        currentTime: vid.currentTime,
+        sentAt: Date.now(),
+      },
+    });
+  });
+
+  useInterval(500, () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    sendCommandToChild({
+      type: "SYNC_VIDEO",
+      event: vid.paused ? "pause" : "play",
+      mode: modeRef.current,
+      payload: {
+        id: videoIdRef.current ?? "",
+        currentTime: vid.currentTime,
+        sentAt: Date.now(),
+      },
+    });
+  });
 
   useEffect(() => {
-    const vid = videoRef.current
-    if (!vid) return
+    const vid = videoRef.current;
+    if (!vid) return;
 
-    const postPlayback = (type: 'play' | 'pause' | 'seek') =>
-      post({ type, videoId: videoIdRef.current, currentTime: vid.currentTime, isIdle: isIdleRef.current })
+    const postPlayback = (event: "play" | "pause" | "seek") =>
+      sendCommandToChild({
+        type: "SYNC_VIDEO",
+        event,
+        mode: modeRef.current,
+        payload: {
+          id: videoIdRef.current ?? "",
+          currentTime: vid.currentTime,
+          sentAt: Date.now(),
+        },
+      });
 
-    const onPlay = () => postPlayback('play')
-    const onPause = () => postPlayback('pause')
-    const onSeeked = () => postPlayback('seek')
+    const onPlay = () => postPlayback("play");
+    const onPause = () => postPlayback("pause");
+    const onSeeked = () => postPlayback("seek");
 
-    vid.addEventListener('play', onPlay)
-    vid.addEventListener('pause', onPause)
-    vid.addEventListener('seeked', onSeeked)
+    vid.addEventListener("play", onPlay);
+    vid.addEventListener("pause", onPause);
+    vid.addEventListener("seeked", onSeeked);
 
     return () => {
-      vid.removeEventListener('play', onPlay)
-      vid.removeEventListener('pause', onPause)
-      vid.removeEventListener('seeked', onSeeked)
-    }
-  }, [])
+      vid.removeEventListener("play", onPlay);
+      vid.removeEventListener("pause", onPause);
+      vid.removeEventListener("seeked", onSeeked);
+    };
+  }, []);
 
-  const resendState = useRef(() => {
-    const latestCues = cuesRef.current
-    post({
-      type: 'titles_map',
-      mapping: {
-        poked: latestCues.find((c) => c.title === 'poked')?.id ?? null,
-        touched_screen: latestCues.find((c) => c.title === 'touched_screen')?.id ?? null,
-      },
-    })
-    post({
-      type: 'game_bindings',
-      mapping: Object.fromEntries(
-        ALL_BINDING_SLOTS.map((s) => {
-          const cue = latestCues.find((c) => c.title === s.key)
-          return [s.key, cue ? { id: cue.id, startTime: cue.startTime } : null]
-        })
-      ),
-    })
-  }).current
-
-  useEffect(() => { resendState() }, [cues])
-
-  const openMonitor = useCallback(() => {
-    window.open('/monitor', '_blank', 'width=960,height=600')
-  }, [])
-
-  const showTicTacToe = useCallback((startTime: number, videoId: string | null) => {
-    post({ type: 'show_tic_tac_toe', videoId, startTime })
-  }, [])
-
-  const showWelcome = useCallback((startTime: number, videoId: string | null) => {
-    post({ type: 'show_welcome', videoId, startTime })
-  }, [])
-
-  const showRockPaperScissors = useCallback((startTime: number, videoId: string | null) => {
-    post({ type: 'show_rock_paper_scissors', videoId, startTime })
-  }, [])
+  useEffect(() => {
+    sendCommandToChild({ type: "CUES_UPDATE" });
+  }, [cues]);
 
   function applyActiveCue() {
     const vid = videoRef.current;
@@ -174,13 +207,11 @@ export default function HotCuePlayer() {
     if (!vid || !cue) return;
     vid.currentTime = cue.startTime;
     void vid.play();
-    if (cue.id === bindings.rps_start) {
-      showRockPaperScissors(cue.startTime, cue.id);
-    } else if (cue.id === bindings["tictactoe-start"]) {
-      showTicTacToe(cue.startTime, cue.id);
-    } else if (isWelcomeCue(cue)) {
-      showWelcome(cue.startTime, cue.id);
-    }
+
+    sendCommandToChild({
+      type: "CHANGE_MODE",
+      mode: getModeFromTitle(cue.title),
+    });
   }
 
   function handleCuePress(cue: HotCue) {
@@ -190,7 +221,6 @@ export default function HotCuePlayer() {
       setSelectedId(cue.id);
     }
   }
-
 
   function handleDeleteCue(i: number) {
     const id = cues[i]?.id;
@@ -205,26 +235,38 @@ export default function HotCuePlayer() {
     graph.clear();
   }
 
-
   async function importClips(files: FileList | File[]) {
-    const videos = Array.from(files).filter((f) => f.type.startsWith('video/'));
+    const videos = Array.from(files).filter((f) => f.type.startsWith("video/"));
     if (videos.length === 0) return;
     const newCues = [];
     for (const file of videos) {
       const id = crypto.randomUUID();
       await storeVideo(id, file);
-      newCues.push({ id, key: '', startTime: 0, title: nameWithoutExt(file.name), label: '', fileName: file.name });
+      newCues.push({
+        id,
+        key: "",
+        startTime: 0,
+        title: nameWithoutExt(file.name),
+        label: "",
+        fileName: file.name,
+      });
     }
     addCues(newCues);
   }
 
   const nextIds = useMemo(
-    () => new Set(graph.links.filter((l) => l.source === selectedId).map((l) => l.target)),
+    () =>
+      new Set(
+        graph.links.filter((l) => l.source === selectedId).map((l) => l.target),
+      ),
     [graph.links, selectedId],
   );
 
   const toggleBtn = (isActive: boolean) =>
-    `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${isActive ? "bg-[#2e2e2e] text-white" : "bg-[#1a1a1a] text-[#888] hover:text-[#ccc]"
+    `px-3 h-8 text-[13px] inline-flex items-center gap-1.5 cursor-pointer leading-none ${
+      isActive
+        ? "bg-[#2e2e2e] text-white"
+        : "bg-[#1a1a1a] text-[#888] hover:text-[#ccc]"
     }`;
 
   return (
@@ -263,15 +305,23 @@ export default function HotCuePlayer() {
         <div className="relative bg-black overflow-hidden w-1/2 h-1/2 mx-auto flex-shrink-0">
           {cues.length === 0 && (
             <div
-              className={`absolute inset-0 flex items-center justify-center border-2 border-dashed cursor-pointer transition-colors ${isDragOver ? "border-[#aaa] bg-white/[0.03]" : "border-[#333]"
-                }`}
-              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+              className={`absolute inset-0 flex items-center justify-center border-2 border-dashed cursor-pointer transition-colors ${
+                isDragOver ? "border-[#aaa] bg-white/[0.03]" : "border-[#333]"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
               onDragLeave={() => setIsDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setIsDragOver(false);
-                if (e.dataTransfer.files.length) void importClips(e.dataTransfer.files);
+                if (e.dataTransfer.files.length)
+                  void importClips(e.dataTransfer.files);
               }}
             >
               <div className="flex flex-col items-center gap-3 text-[#666] text-sm pointer-events-none">
@@ -299,50 +349,97 @@ export default function HotCuePlayer() {
         <div className="flex items-center justify-between mt-6 mb-3 px-3 py-2 bg-[#1a1a1a] rounded min-h-10 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded border border-[#3a3a3a] overflow-hidden">
-              <button className={toggleBtn(view === "list")} onClick={(e) => { e.stopPropagation(); setView("list") }}>
-                <List size={14} />List
+              <button
+                className={toggleBtn(view === "list")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setView("list");
+                }}
+              >
+                <List size={14} />
+                List
               </button>
-              <button className={toggleBtn(view === "graph")} onClick={(e) => { e.stopPropagation(); setView("graph") }}>
-                <Network size={14} />Graph
+              <button
+                className={toggleBtn(view === "graph")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setView("graph");
+                }}
+              >
+                <Network size={14} />
+                Graph
               </button>
             </div>
-            <button className={btnCls} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}>
-              <Plus size={14} />Add clips
+            <button
+              className={btnCls}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+            >
+              <Plus size={14} />
+              Add clips
             </button>
           </div>
           <div className="flex items-center gap-2">
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
               disabled={!playing.src}
-              onClick={(e) => { e.stopPropagation(); openMonitor() }}
+              onClick={(e) => {
+                e.stopPropagation();
+                openChildPage();
+              }}
             >
-              <Monitor size={14} />Open monitor
+              <Monitor size={14} />
+              Open monitor
             </button>
-            <button className={btnCls} onClick={(e) => { e.stopPropagation(); importInputRef.current?.click() }}>
-              <Upload size={14} />Import
+            <button
+              className={btnCls}
+              onClick={(e) => {
+                e.stopPropagation();
+                importInputRef.current?.click();
+              }}
+            >
+              <Upload size={14} />
+              Import
             </button>
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed`}
               disabled={cues.length === 0}
-              onClick={(e) => { e.stopPropagation(); exportCues() }}
+              onClick={(e) => {
+                e.stopPropagation();
+                exportCues();
+              }}
             >
-              <Download size={14} />Export
+              <Download size={14} />
+              Export
             </button>
             <button
               className={`${btnCls} disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#c44] hover:text-[#c44]`}
               disabled={cues.length === 0}
-              onClick={(e) => { e.stopPropagation(); handleClearCues() }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClearCues();
+              }}
             >
-              <Trash2 size={14} />Clear all
+              <Trash2 size={14} />
+              Clear all
             </button>
           </div>
         </div>
 
         {SLOT_GROUPS.map((group) => (
-          <div key={group.label} className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]">
+          <div
+            key={group.label}
+            className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 px-3 py-2 bg-[#1a1a1a] rounded flex-shrink-0 text-[13px]"
+          >
             <span className="text-[#888] font-medium">{group.label}</span>
             {group.slots.map((slot) => (
-              <SlotDisplay key={slot.key} slot={slot} cue={cueByTitle.get(slot.key)} />
+              <SlotDisplay
+                key={slot.key}
+                slot={slot}
+                cue={cueByTitle.get(slot.key)}
+              />
             ))}
           </div>
         ))}
@@ -365,8 +462,15 @@ export default function HotCuePlayer() {
                   key={cue.id}
                   className={`${cueCardBase} flex-shrink-0 ${cueHighlightClass(selectedId === cue.id, nextIds.has(cue.id))}`}
                   title={cue.fileName}
-                  onClick={(e) => { e.stopPropagation(); handleCuePress(cue) }}
-                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setEditingIndex(i) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCuePress(cue);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setEditingIndex(i);
+                  }}
                 >
                   <CueCardFace
                     cue={cue}
@@ -379,7 +483,10 @@ export default function HotCuePlayer() {
             <button
               className="w-16 h-28 bg-transparent border border-dashed border-[#3a3a3a] rounded text-[#555] cursor-pointer text-xl leading-none flex items-center justify-center flex-shrink-0 hover:border-[#666] hover:text-[#aaa]"
               title="Upload clip(s)"
-              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
             >
               <Plus size={20} />
             </button>

@@ -1,41 +1,37 @@
-import type { MutableRefObject, RefObject } from 'react'
-import type { MonitorMode } from './useMonitorSync'
-import { playVideoWhenReady } from './useMonitorSync'
+import type { MutableRefObject } from 'react'
+import type { MonitorMode } from './controller/types'
 
 export function useOverlayVideo(
-  videoRef: RefObject<HTMLVideoElement | null>,
+  videoRefs: MutableRefObject<Map<string, HTMLVideoElement>>,
+  activeIdRef: MutableRefObject<string | null>,
   modeRef: MutableRefObject<MonitorMode>,
-  getClipUrl: (id: string | null) => string | undefined,
-  getCurrentClipId: () => string | null,
+  setActiveId: (id: string | null) => void,
   setShowOverlay: (show: boolean) => void,
 ) {
-  function triggerOverlayVideo(targetUrl: string | null) {
-    const vid = videoRef.current
-    if (!vid || !targetUrl || modeRef.current !== 'video') return
+  function triggerOverlayVideo(targetId: string | null) {
+    if (!targetId || modeRef.current !== 'video') return
 
-    // Capture as a local snapshot — avoids stale reads if triggered again before restore fires.
-    const snapshot = {
-      videoId: getCurrentClipId(),
-      currentTime: vid.currentTime,
-      play: !vid.paused,
-    }
+    const previousId = activeIdRef.current
+    const previousTime = videoRefs.current.get(previousId ?? '')?.currentTime ?? 0
+    const wasPlaying = !(videoRefs.current.get(previousId ?? '')?.paused ?? true)
 
     setShowOverlay(false)
-    vid.pause()
-    vid.src = targetUrl
-    vid.currentTime = 0
-    vid.load()
-    playVideoWhenReady(vid)
+    setActiveId(targetId)
 
-    vid.addEventListener('ended', function restore() {
-      vid.removeEventListener('ended', restore)
-      const idleUrl = getClipUrl(snapshot.videoId)
-      if (idleUrl) {
-        vid.pause()
-        vid.src = idleUrl
-        vid.currentTime = snapshot.currentTime
-        vid.load()
-        if (snapshot.play) playVideoWhenReady(vid)
+    const targetVid = videoRefs.current.get(targetId)
+    if (!targetVid) return
+    targetVid.currentTime = 0
+    void targetVid.play()
+
+    targetVid.addEventListener('ended', function restore() {
+      targetVid.removeEventListener('ended', restore)
+      setActiveId(previousId)
+      if (previousId) {
+        const prev = videoRefs.current.get(previousId)
+        if (prev) {
+          prev.currentTime = previousTime
+          if (wasPlaying) void prev.play()
+        }
       }
       setShowOverlay(true)
     })
