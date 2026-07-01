@@ -7,7 +7,7 @@ import { useHotCues } from "../hooks/useHotCues";
 import { useCueGraph } from "../hooks/useCueGraph";
 import { useChildPageController } from "../hooks/controller/useChildPageController";
 import { useInterval } from "../hooks/useInterval";
-import type { MonitorMode } from "../hooks/controller/types";
+import type { MonitorMode, TttClip } from "../hooks/controller/types";
 import { useCueBlobUrls } from "../hooks/useCueBlobUrls";
 import { storeVideo, deleteVideo, clearAllVideos } from "../lib/videoDB";
 import { cueCardBase, cueHighlightClass } from "../lib/cueStyle";
@@ -114,7 +114,7 @@ export default function HotCuePlayer() {
   const { openChildPage, sendCommandToChild, onConnected, onMessage } =
     useChildPageController();
 
-  const syncReactionCue = (title: string) => {
+  const syncCue = (title: string) => {
     const cue = cues.find((c) => c.title === title);
     if (!cue) return;
     const vid = videoRef.current;
@@ -123,18 +123,35 @@ export default function HotCuePlayer() {
       vid.currentTime = cue.startTime;
       void vid.play();
     }
-
-    sendCommandToChild({ type: "CHANGE_MODE", mode: "idle" });
     sendCommandToChild({
       type: "SYNC_VIDEO",
       event: "play",
-      mode: "idle",
+      mode: modeRef.current,
       payload: { id: cue.id, currentTime: cue.startTime, sentAt: Date.now() },
     });
   };
 
-  onMessage("YODA_POKED", () => syncReactionCue("poke-yoda"));
-  onMessage("BACKGROUND_POKED", () => syncReactionCue("poke-bg"));
+  onMessage("YODA_POKED", () => {
+    sendCommandToChild({ type: "CHANGE_MODE", mode: "idle" });
+    syncCue("poke-yoda");
+  });
+  onMessage("BACKGROUND_POKED", () => {
+    sendCommandToChild({ type: "CHANGE_MODE", mode: "idle" });
+    syncCue("poke-bg");
+  });
+
+  const tttTitleMap: Record<TttClip, string> = {
+    start: "tictactoe-start",
+    turn: "tictactoe-turn",
+    win: "tictactoe-win",
+    lose: "tictactoe-lose",
+    draw: "tictactoe-draw",
+    idle: "tictactoe-idle",
+  };
+
+  onMessage("TICTACTOE_PLAY", ({ clip }) => {
+    syncCue(tttTitleMap[clip]);
+  });
 
   onConnected(() => {
     const vid = videoRef.current;

@@ -1,16 +1,15 @@
 import Head from "next/head";
 import { useCallback, useEffect, useRef, useState } from "react";
-// import TicTacToe from '../components/TicTacToe'
+import TicTacToe from "../components/TicTacToe";
 import InteractiveOverlay from "../components/PokingYoda/PokedGame";
 // import RockPaperScissors from '../components/RockPaperScissors/RockPaperScissors'
 import { useParentPageController } from "../hooks/controller/useParentPageController";
 import { useMonitorVideos } from "../hooks/useMonitorVideos";
-// import { ALL_BINDING_SLOTS, type GameClip, type GameClips, type RPSClips } from '../types'
-import type { MonitorMode } from "../hooks/controller/types";
+import type { MonitorMode, TttClip } from "../hooks/controller/types";
 
 const safePlay = (vid: HTMLVideoElement) =>
   vid.play().catch((e: unknown) => {
-    if (e instanceof DOMException && e.name === 'AbortError') return;
+    if (e instanceof DOMException && e.name === "AbortError") return;
     throw e;
   });
 
@@ -22,17 +21,7 @@ export default function Monitor() {
   const [mode, setMode] = useState<MonitorMode>("video");
   const [synced, setSynced] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
-  // const [gameSession, setGameSession] = useState(0)
-  // const [rpsSession, setRpsSession] = useState(0)
-  // const [gameClips, setGameClips] = useState<GameClips>({
-  //   start: null, place: null, win: null, lose: null, draw: null, idle: null,
-  // })
-  // const [rpsClips, setRpsClips] = useState<RPSClips>({
-  //   intro: null,
-  //   rock_win: null, rock_lose: null, rock_draw: null,
-  //   paper_win: null, paper_lose: null, paper_draw: null,
-  //   scissors_win: null, scissors_lose: null, scissors_draw: null,
-  // })
+  const [tttClipEndedSignal, setTttClipEndedSignal] = useState(0);
 
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const activeIdRef = useRef<string | null>(null);
@@ -49,36 +38,13 @@ export default function Monitor() {
     modeRef.current = mode;
     console.log("[monitor] mode:", mode);
   }, [mode]);
+
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
 
   onMessage("CUES_UPDATE", () => {
-    void reload().then(() => {
-      const cues: { id: string; title: string; startTime: number }[] =
-        JSON.parse(localStorage.getItem("hotCues") ?? "[]");
-      const byTitle = (title: string) =>
-        cues.find((c) => c.title === title) ?? null;
-
-      // const getClip = (title: string): GameClip => {
-      //   const cue = byTitle(title)
-      //   if (!cue) return null
-      //   const src = videoRefs.current.get(cue.id)?.src ?? null
-      //   return src ? { src, startTime: cue.startTime } : null
-      // }
-      // Promise.all(
-      //   ALL_BINDING_SLOTS.map(async (s) => [s.key, getClip(s.key)] as const)
-      // ).then((entries) => {
-      //   const r = Object.fromEntries(entries) as Record<string, GameClip>
-      //   setGameClips({ start: r.start, place: r.place, win: r.win, lose: r.lose, draw: r.draw, idle: r.idle })
-      //   setRpsClips({
-      //     intro: r.intro,
-      //     rock_win: r.rock_win, rock_lose: r.rock_lose, rock_draw: r.rock_draw,
-      //     paper_win: r.paper_win, paper_lose: r.paper_lose, paper_draw: r.paper_draw,
-      //     scissors_win: r.scissors_win, scissors_lose: r.scissors_lose, scissors_draw: r.scissors_draw,
-      //   })
-      // }).catch(console.error)
-    });
+    void reload();
   });
 
   onMessage("CHANGE_MODE", ({ mode }) => {
@@ -112,6 +78,13 @@ export default function Monitor() {
     else if (event === "pause" && !vid.paused) vid.pause();
   });
 
+  const handleTttPlayClip = useCallback(
+    (clip: TttClip) => {
+      sendToParent({ type: "TICTACTOE_PLAY", clip });
+    },
+    [sendToParent],
+  );
+
   const applyLastSync = useCallback(() => {
     const s = lastSyncRef.current;
     if (!s) return;
@@ -132,19 +105,7 @@ export default function Monitor() {
   const handleSync = useCallback(() => {
     setSynced(true);
     applyLastSync();
-    // const saved = localStorage.getItem('monitorMode')
-    // if (saved === 'tic-tac-toe') {
-    //   modeRef.current = 'tic-tac-toe'
-    //   setMode('tic-tac-toe')
-    //   setShowOverlay(false)
-    //   setGameSession((p) => p + 1)
-    // } else if (saved === 'rock-paper-scissors') {
-    //   modeRef.current = 'rock-paper-scissors'
-    //   setMode('rock-paper-scissors')
-    //   setShowOverlay(false)
-    //   setRpsSession((p) => p + 1)
-    // }
-  }, []);
+  }, [applyLastSync]);
 
   return (
     <>
@@ -163,12 +124,16 @@ export default function Monitor() {
             }}
             className="absolute inset-0 w-full h-full object-contain"
             style={{ display: id === activeId ? "block" : "none" }}
+            onEnded={() => {
+              if (
+                id === activeIdRef.current &&
+                modeRef.current === "tic-tac-toe"
+              ) {
+                setTttClipEndedSignal((s) => s + 1);
+              }
+            }}
           />
         ))}
-
-        {/* {mode === 'tic-tac-toe' && (
-          <TicTacToe key={gameSession} clips={gameClips} />
-        )} */}
 
         {/* {mode === 'rock-paper-scissors' && (
           <div className="absolute inset-0 z-50">
@@ -189,6 +154,13 @@ export default function Monitor() {
           <InteractiveOverlay
             onPokeClick={() => sendToParent({ type: "YODA_POKED" })}
             onBackgroundClick={() => sendToParent({ type: "BACKGROUND_POKED" })}
+          />
+        )}
+
+        {mode === "tic-tac-toe" && (
+          <TicTacToe
+            onPlayClip={handleTttPlayClip}
+            clipEndedSignal={tttClipEndedSignal}
           />
         )}
       </div>
